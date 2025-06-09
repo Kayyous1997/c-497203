@@ -173,32 +173,6 @@ const SwapInterface = () => {
       </div>
     </div>
   );
-
-  function getTokenPrice(symbol: string) {
-    return tokens.find(token => token.symbol === symbol)?.price || 0;
-  }
-
-  function calculateSwap(amount: string, from: string, to: string) {
-    if (!amount || isNaN(Number(amount))) return "";
-    const fromPrice = getTokenPrice(from);
-    const toPrice = getTokenPrice(to);
-    const result = (Number(amount) * fromPrice) / toPrice;
-    return result.toFixed(6);
-  }
-
-  function handleFromAmountChange(value: string) {
-    setFromAmount(value);
-    setToAmount(calculateSwap(value, fromToken, toToken));
-  }
-
-  function handleSwapTokens() {
-    const tempToken = fromToken;
-    const tempAmount = fromAmount;
-    setFromToken(toToken);
-    setToToken(tempToken);
-    setFromAmount(toAmount);
-    setToAmount(tempAmount);
-  }
 };
 
 export default SwapInterface;
