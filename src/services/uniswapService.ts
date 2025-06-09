@@ -56,7 +56,6 @@ export class UniswapService {
         tokenOut,
         TradeType.EXACT_INPUT,
         {
-          type: 0, // SwapRouter02 type
           recipient: '0x0000000000000000000000000000000000000000', // Will be set by wallet
           slippageTolerance: new Percent(50, 10_000), // 0.5%
           deadline: Math.floor(Date.now() / 1000) + 60 * 20 // 20 minutes

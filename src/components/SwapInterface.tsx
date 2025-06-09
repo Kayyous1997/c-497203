@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from "react";
-import { useAccount, useWalletClient } from "wagmi";
+import { useAccount, useSigner } from "wagmi";
 import { ethers } from "ethers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,15 +11,9 @@ import TokenSelector from "./TokenSelector";
 import { Token, tokenService } from "@/services/tokenService";
 import { UniswapService } from "@/services/uniswapService";
 
-declare global {
-  interface Window {
-    ethereum?: any;
-  }
-}
-
 const SwapInterface = () => {
   const { isConnected, chain } = useAccount();
-  const { data: walletClient } = useWalletClient();
+  const { data: signer } = useSigner();
   const { toast } = useToast();
   
   const [fromAmount, setFromAmount] = useState("");
@@ -31,7 +25,7 @@ const SwapInterface = () => {
   const [uniswapService, setUniswapService] = useState<UniswapService | null>(null);
 
   useEffect(() => {
-    if (chain?.id && isConnected && window.ethereum) {
+    if (chain?.id && isConnected) {
       // Initialize provider and Uniswap service
       const provider = new ethers.providers.Web3Provider(window.ethereum);
       const service = new UniswapService(provider, chain.id);
@@ -98,7 +92,7 @@ const SwapInterface = () => {
   };
 
   const handleSwap = async () => {
-    if (!isConnected || !walletClient || !fromToken || !toToken || !fromAmount || !uniswapService || !window.ethereum) {
+    if (!isConnected || !signer || !fromToken || !toToken || !fromAmount || !uniswapService) {
       toast({
         title: "Missing requirements",
         description: "Please ensure wallet is connected and tokens are selected.",
@@ -109,10 +103,6 @@ const SwapInterface = () => {
 
     setLoading(true);
     try {
-      // Create ethers signer from wallet client
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      
       const txHash = await uniswapService.executeSwap(
         fromToken,
         toToken,
