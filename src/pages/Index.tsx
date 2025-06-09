@@ -1,6 +1,7 @@
+
 import MarketStats from "@/components/MarketStats";
 import CryptoChart from "@/components/CryptoChart";
-import PortfolioCard from "@/components/PortfolioCard";
+import SwapInterface from "@/components/SwapInterface";
 import CryptoList from "@/components/CryptoList";
 
 const Index = () => {
@@ -19,7 +20,7 @@ const Index = () => {
             <CryptoChart />
           </div>
           <div>
-            <PortfolioCard />
+            <SwapInterface />
           </div>
         </div>
         
