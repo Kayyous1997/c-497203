@@ -1,85 +1,41 @@
 
-import { useState, useEffect } from "react";
-import { useAccount, useSigner } from "wagmi";
-import { ethers } from "ethers";
+import { useState } from "react";
+import { useAccount } from "wagmi";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowDown, Loader2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import TokenSelector from "./TokenSelector";
-import { Token, tokenService } from "@/services/tokenService";
-import { UniswapService } from "@/services/uniswapService";
+import { ArrowDown } from "lucide-react";
 
 const SwapInterface = () => {
-  const { isConnected, chain } = useAccount();
-  const { data: signer } = useSigner();
-  const { toast } = useToast();
-  
+  const { isConnected } = useAccount();
   const [fromAmount, setFromAmount] = useState("");
   const [toAmount, setToAmount] = useState("");
-  const [fromToken, setFromToken] = useState<Token | null>(null);
-  const [toToken, setToToken] = useState<Token | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [quoting, setQuoting] = useState(false);
-  const [uniswapService, setUniswapService] = useState<UniswapService | null>(null);
+  const [fromToken, setFromToken] = useState("BTC");
+  const [toToken, setToToken] = useState("ETH");
 
-  useEffect(() => {
-    if (chain?.id && isConnected) {
-      // Initialize provider and Uniswap service
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const service = new UniswapService(provider, chain.id);
-      setUniswapService(service);
-      
-      // Load default tokens for the chain
-      loadDefaultTokens();
-    }
-  }, [chain?.id, isConnected]);
+  const tokens = [
+    { symbol: "BTC", name: "Bitcoin", price: 65000 },
+    { symbol: "ETH", name: "Ethereum", price: 3200 },
+    { symbol: "USDT", name: "Tether", price: 1 },
+    { symbol: "BNB", name: "Binance Coin", price: 580 },
+  ];
 
-  useEffect(() => {
-    if (fromAmount && fromToken && toToken && uniswapService) {
-      getQuote();
-    } else {
-      setToAmount("");
-    }
-  }, [fromAmount, fromToken, toToken, uniswapService]);
-
-  const loadDefaultTokens = async () => {
-    if (!chain?.id) return;
-    
-    const tokens = tokenService.getTokensForChain(chain.id);
-    if (tokens.length >= 2) {
-      setFromToken(tokens[0]);
-      setToToken(tokens[1]);
-    }
+  const getTokenPrice = (symbol: string) => {
+    return tokens.find(token => token.symbol === symbol)?.price || 0;
   };
 
-  const getQuote = async () => {
-    if (!fromAmount || !fromToken || !toToken || !uniswapService) return;
-    
-    setQuoting(true);
-    try {
-      const quote = await uniswapService.getQuote(fromToken, toToken, fromAmount);
-      if (quote) {
-        setToAmount(quote.outputAmount);
-      } else {
-        setToAmount("");
-        toast({
-          title: "No route found",
-          description: "Unable to find a swap route for these tokens.",
-          variant: "destructive"
-        });
-      }
-    } catch (error) {
-      console.error('Quote error:', error);
-      setToAmount("");
-    } finally {
-      setQuoting(false);
-    }
+  const calculateSwap = (amount: string, from: string, to: string) => {
+    if (!amount || isNaN(Number(amount))) return "";
+    const fromPrice = getTokenPrice(from);
+    const toPrice = getTokenPrice(to);
+    const result = (Number(amount) * fromPrice) / toPrice;
+    return result.toFixed(6);
   };
 
   const handleFromAmountChange = (value: string) => {
     setFromAmount(value);
+    setToAmount(calculateSwap(value, fromToken, toToken));
   };
 
   const handleSwapTokens = () => {
@@ -91,48 +47,15 @@ const SwapInterface = () => {
     setToAmount(tempAmount);
   };
 
-  const handleSwap = async () => {
-    if (!isConnected || !signer || !fromToken || !toToken || !fromAmount || !uniswapService) {
-      toast({
-        title: "Missing requirements",
-        description: "Please ensure wallet is connected and tokens are selected.",
-        variant: "destructive"
-      });
+  const handleSwap = () => {
+    if (!isConnected) {
+      alert("Please connect your wallet first");
       return;
     }
-
-    setLoading(true);
-    try {
-      const txHash = await uniswapService.executeSwap(
-        fromToken,
-        toToken,
-        fromAmount,
-        signer
-      );
-      
-      if (txHash) {
-        toast({
-          title: "Swap successful!",
-          description: `Transaction hash: ${txHash.slice(0, 10)}...`,
-        });
-        setFromAmount("");
-        setToAmount("");
-      } else {
-        throw new Error("Swap failed");
-      }
-    } catch (error) {
-      console.error('Swap error:', error);
-      toast({
-        title: "Swap failed",
-        description: "Please try again or check your transaction settings.",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
+    // Placeholder for actual swap logic
+    console.log(`Swapping ${fromAmount} ${fromToken} for ${toAmount} ${toToken}`);
+    alert(`Swap initiated: ${fromAmount} ${fromToken} → ${toAmount} ${toToken}`);
   };
-
-  const canSwap = isConnected && fromToken && toToken && fromAmount && toAmount && !loading && !quoting;
 
   return (
     <div className="glass-card p-6 rounded-lg mb-8 animate-fade-in">
@@ -145,7 +68,7 @@ const SwapInterface = () => {
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-muted-foreground">From</span>
               <span className="text-sm text-muted-foreground">
-                Balance: {isConnected ? "0.00" : "0.00"} {fromToken?.symbol || ""}
+                Balance: {isConnected ? "2.45" : "0.00"} {fromToken}
               </span>
             </div>
             <div className="flex items-center space-x-3">
@@ -154,14 +77,21 @@ const SwapInterface = () => {
                 placeholder="0.0"
                 value={fromAmount}
                 onChange={(e) => handleFromAmountChange(e.target.value)}
-                className="text-lg font-semibold bg-transparent border-none p-0 h-auto flex-1"
+                className="text-lg font-semibold bg-transparent border-none p-0 h-auto"
                 disabled={!isConnected}
               />
-              <TokenSelector
-                selectedToken={fromToken}
-                onTokenSelect={setFromToken}
-                label="From"
-              />
+              <Select value={fromToken} onValueChange={setFromToken}>
+                <SelectTrigger className="w-24 bg-muted/20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {tokens.map((token) => (
+                    <SelectItem key={token.symbol} value={token.symbol}>
+                      {token.symbol}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
@@ -185,47 +115,43 @@ const SwapInterface = () => {
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm text-muted-foreground">To</span>
               <span className="text-sm text-muted-foreground">
-                Balance: {isConnected ? "0.00" : "0.00"} {toToken?.symbol || ""}
+                Balance: {isConnected ? "5.12" : "0.00"} {toToken}
               </span>
             </div>
             <div className="flex items-center space-x-3">
-              <div className="flex-1 relative">
-                <Input
-                  type="number"
-                  placeholder="0.0"
-                  value={toAmount}
-                  readOnly
-                  className="text-lg font-semibold bg-transparent border-none p-0 h-auto"
-                />
-                {quoting && (
-                  <Loader2 className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 animate-spin" />
-                )}
-              </div>
-              <TokenSelector
-                selectedToken={toToken}
-                onTokenSelect={setToToken}
-                label="To"
+              <Input
+                type="number"
+                placeholder="0.0"
+                value={toAmount}
+                readOnly
+                className="text-lg font-semibold bg-transparent border-none p-0 h-auto"
               />
+              <Select value={toToken} onValueChange={setToToken}>
+                <SelectTrigger className="w-24 bg-muted/20">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {tokens.map((token) => (
+                    <SelectItem key={token.symbol} value={token.symbol}>
+                      {token.symbol}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </CardContent>
         </Card>
 
         {/* Swap Details */}
-        {fromAmount && toAmount && isConnected && fromToken && toToken && (
+        {fromAmount && toAmount && isConnected && (
           <div className="bg-muted/10 rounded-lg p-3 space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Rate</span>
-              <span>
-                1 {fromToken.symbol} = {toAmount && fromAmount ? (parseFloat(toAmount) / parseFloat(fromAmount)).toFixed(6) : "0"} {toToken.symbol}
-              </span>
+              <span>1 {fromToken} = {calculateSwap("1", fromToken, toToken)} {toToken}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Network</span>
-              <span>{chain?.name || "Unknown"}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Slippage</span>
-              <span>0.5%</span>
+              <span className="text-muted-foreground">Network Fee</span>
+              <span>~$2.50</span>
             </div>
           </div>
         )}
@@ -234,24 +160,9 @@ const SwapInterface = () => {
         <Button 
           className="w-full" 
           onClick={handleSwap}
-          disabled={!canSwap}
+          disabled={!isConnected || !fromAmount || !toAmount}
         >
-          {loading ? (
-            <div className="flex items-center space-x-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Swapping...</span>
-            </div>
-          ) : !isConnected ? (
-            "Connect Wallet"
-          ) : !fromToken || !toToken ? (
-            "Select Tokens"
-          ) : !fromAmount ? (
-            "Enter Amount"
-          ) : quoting ? (
-            "Getting Quote..."
-          ) : (
-            "Swap"
-          )}
+          {!isConnected ? "Connect Wallet" : !fromAmount ? "Enter Amount" : "Swap"}
         </Button>
       </div>
     </div>
