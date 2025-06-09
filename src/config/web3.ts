@@ -3,7 +3,7 @@ import { defaultWagmiConfig } from '@web3modal/wagmi/react/config'
 import { mainnet, arbitrum, polygon } from 'wagmi/chains'
 
 // Get projectId from https://cloud.walletconnect.com
-export const projectId = 'YOUR_PROJECT_ID'
+export const projectId = '535acf9f46f8f279f492a746b1ec219a'
 
 if (!projectId) throw new Error('Project ID is not defined')
 
