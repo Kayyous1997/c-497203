@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowDown } from "lucide-react";
-import { WalletConnect } from "@/components/WalletConnect";
 
 const SwapInterface = () => {
   const { isConnected } = useAccount();
@@ -61,11 +60,6 @@ const SwapInterface = () => {
   return (
     <div className="glass-card p-6 rounded-lg mb-8 animate-fade-in">
       <h2 className="text-xl font-semibold mb-6">Swap Tokens</h2>
-      
-      {/* Wallet Connection */}
-      <div className="mb-6">
-        <WalletConnect />
-      </div>
 
       <div className="space-y-4">
         {/* From Token */}
