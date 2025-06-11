@@ -19,7 +19,7 @@ export const CHAIN_CONFIGS = {
     routerAddress: '0x2626664c2603336E57B271c5C0b26F421741e481'
   },
   59144: {
-    chainId: ChainId.LINEA,
+    chainId: 59144, // Use numeric value since LINEA doesn't exist in ChainId enum
     name: 'Linea',
     rpcUrl: 'https://rpc.linea.build',
     routerAddress: '0x2626664c2603336E57B271c5C0b26F421741e481'
@@ -147,7 +147,7 @@ export class UniswapService {
     }
   }
 
-  async executeSwap(params: SwapParams, signer: ethers.Signer): Promise<string | null> {
+  async executeSwap(params: SwapParams, walletClient: any): Promise<string | null> {
     const quote = await this.getSwapQuote(params);
     
     if (!quote || !quote.methodParameters) {
@@ -155,6 +155,10 @@ export class UniswapService {
     }
 
     try {
+      // Convert walletClient to ethers signer for compatibility
+      const provider = new ethers.providers.Web3Provider(walletClient);
+      const signer = provider.getSigner();
+
       const transaction = {
         to: quote.methodParameters.to,
         data: quote.methodParameters.calldata,

@@ -1,13 +1,13 @@
 
 import { useState, useCallback, useEffect } from 'react';
-import { useAccount, useNetwork, useSigner } from 'wagmi';
+import { useAccount, useChainId, useWalletClient } from 'wagmi';
 import { uniswapService, SwapParams, SwapQuote } from '@/services/uniswapService';
 import { useToast } from '@/hooks/use-toast';
 
 export const useUniswap = () => {
   const { address, isConnected } = useAccount();
-  const { chain } = useNetwork();
-  const { data: signer } = useSigner();
+  const chainId = useChainId();
+  const { data: walletClient } = useWalletClient();
   const { toast } = useToast();
   
   const [isInitialized, setIsInitialized] = useState(false);
@@ -17,16 +17,16 @@ export const useUniswap = () => {
   // Initialize Uniswap service when chain changes
   useEffect(() => {
     const initializeService = async () => {
-      if (chain?.id) {
+      if (chainId) {
         try {
-          await uniswapService.initialize(chain.id);
+          await uniswapService.initialize(chainId);
           setIsInitialized(true);
-          console.log('Uniswap service initialized for chain:', chain.id);
+          console.log('Uniswap service initialized for chain:', chainId);
         } catch (error) {
           console.error('Failed to initialize Uniswap service:', error);
           toast({
             title: "Network Not Supported",
-            description: `Uniswap is not available on ${chain.name}`,
+            description: `Uniswap is not available on this network`,
             variant: "destructive"
           });
           setIsInitialized(false);
@@ -35,10 +35,10 @@ export const useUniswap = () => {
     };
 
     initializeService();
-  }, [chain?.id, toast]);
+  }, [chainId, toast]);
 
   const getQuote = useCallback(async (params: Omit<SwapParams, 'recipient' | 'chainId'>) => {
-    if (!isInitialized || !address || !chain?.id) {
+    if (!isInitialized || !address || !chainId) {
       toast({
         title: "Not Ready",
         description: "Please connect your wallet and ensure the network is supported",
@@ -52,7 +52,7 @@ export const useUniswap = () => {
       const fullParams: SwapParams = {
         ...params,
         recipient: address,
-        chainId: chain.id
+        chainId: chainId
       };
 
       const result = await uniswapService.getSwapQuote(fullParams);
@@ -69,10 +69,10 @@ export const useUniswap = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isInitialized, address, chain?.id, toast]);
+  }, [isInitialized, address, chainId, toast]);
 
   const executeSwap = useCallback(async (params: Omit<SwapParams, 'recipient' | 'chainId'>) => {
-    if (!isInitialized || !address || !chain?.id || !signer) {
+    if (!isInitialized || !address || !chainId || !walletClient) {
       toast({
         title: "Not Ready",
         description: "Please connect your wallet and ensure the network is supported",
@@ -86,10 +86,10 @@ export const useUniswap = () => {
       const fullParams: SwapParams = {
         ...params,
         recipient: address,
-        chainId: chain.id
+        chainId: chainId
       };
 
-      const txHash = await uniswapService.executeSwap(fullParams, signer);
+      const txHash = await uniswapService.executeSwap(fullParams, walletClient);
       
       if (txHash) {
         toast({
@@ -116,12 +116,12 @@ export const useUniswap = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isInitialized, address, chain?.id, signer, toast]);
+  }, [isInitialized, address, chainId, walletClient, toast]);
 
   const getTokenAddress = useCallback((symbol: string) => {
-    if (!chain?.id) return null;
-    return uniswapService.getTokenAddress(symbol, chain.id);
-  }, [chain?.id]);
+    if (!chainId) return null;
+    return uniswapService.getTokenAddress(symbol, chainId);
+  }, [chainId]);
 
   return {
     isInitialized,
@@ -131,6 +131,6 @@ export const useUniswap = () => {
     executeSwap,
     getTokenAddress,
     supportedChains: uniswapService.getSupportedChains(),
-    currentChainId: chain?.id
+    currentChainId: chainId
   };
 };
