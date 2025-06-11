@@ -1,4 +1,3 @@
-
 import { Token, CurrencyAmount, TradeType, Percent } from '@uniswap/sdk-core';
 import { AlphaRouter, SwapType } from '@uniswap/smart-order-router';
 import { ethers } from 'ethers';
@@ -112,7 +111,7 @@ export class UniswapService {
         ethers.utils.parseUnits(params.amountIn, 18).toString()
       );
 
-      // Get route
+      // Get route with correct options for Universal Router
       const route = await this.router.route(
         amountIn,
         tokenOut,
@@ -120,7 +119,6 @@ export class UniswapService {
         {
           recipient: params.recipient,
           slippageTolerance: new Percent(Math.floor(params.slippageTolerance * 100), 10000),
-          deadline: Math.floor(Date.now() / 1000) + 60 * 20, // 20 minutes
           type: SwapType.UNIVERSAL_ROUTER
         }
       );
@@ -189,3 +187,5 @@ export class UniswapService {
 }
 
 export const uniswapService = new UniswapService();
+
+export default uniswapService;
