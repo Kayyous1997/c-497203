@@ -1,32 +1,34 @@
 
 import { Token, CurrencyAmount, TradeType, Percent } from '@uniswap/sdk-core';
-import { AlphaRouter, SwapType } from '@uniswap/smart-order-router';
 import { ethers } from 'ethers';
 import { ChainId } from '@uniswap/sdk-core';
 
-// Chain configurations
+// Chain configurations - you can update these with your own contract addresses
 export const CHAIN_CONFIGS = {
   1: {
     chainId: ChainId.MAINNET,
     name: 'Ethereum',
     rpcUrl: 'https://mainnet.infura.io/v3/YOUR_INFURA_KEY',
-    routerAddress: '0xE592427A0AEce92De3Edee1F18E0157C05861564'
+    routerAddress: '', // You'll add your router contract address here
+    factoryAddress: '', // You'll add your factory contract address here
   },
   8453: {
     chainId: ChainId.BASE,
     name: 'Base',
     rpcUrl: 'https://mainnet.base.org',
-    routerAddress: '0x2626664c2603336E57B271c5C0b26F421741e481'
+    routerAddress: '', // You'll add your router contract address here
+    factoryAddress: '', // You'll add your factory contract address here
   },
   59144: {
-    chainId: 59144, // Use numeric value since LINEA doesn't exist in ChainId enum
+    chainId: 59144,
     name: 'Linea',
     rpcUrl: 'https://rpc.linea.build',
-    routerAddress: '0x2626664c2603336E57B271c5C0b26F421741e481'
+    routerAddress: '', // You'll add your router contract address here
+    factoryAddress: '', // You'll add your factory contract address here
   }
 };
 
-// Common token addresses for different chains
+// Token addresses for different chains
 export const TOKEN_ADDRESSES = {
   1: { // Ethereum
     WETH: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2',
@@ -63,12 +65,18 @@ export interface SwapQuote {
   methodParameters?: any;
 }
 
-export class UniswapService {
-  private router: AlphaRouter | null = null;
+export interface DexConfig {
+  routerAddress: string;
+  factoryAddress: string;
+  swapFeePercent: number; // Your DEX fee percentage
+}
+
+export class DexService {
   private provider: ethers.providers.JsonRpcProvider | null = null;
   private chainId: number = 1;
+  private dexConfig: DexConfig | null = null;
 
-  async initialize(chainId: number) {
+  async initialize(chainId: number, dexConfig?: DexConfig) {
     this.chainId = chainId;
     const config = CHAIN_CONFIGS[chainId as keyof typeof CHAIN_CONFIGS];
     
@@ -77,32 +85,73 @@ export class UniswapService {
     }
 
     this.provider = new ethers.providers.JsonRpcProvider(config.rpcUrl);
-    this.router = new AlphaRouter({
-      chainId: config.chainId,
-      provider: this.provider
-    });
+    
+    // Use provided config or default empty config
+    this.dexConfig = dexConfig || {
+      routerAddress: config.routerAddress,
+      factoryAddress: config.factoryAddress,
+      swapFeePercent: 0.3 // Default 0.3% fee
+    };
 
-    console.log(`Uniswap service initialized for ${config.name}`);
+    console.log(`DEX service initialized for ${config.name}`);
+    console.log('Router address:', this.dexConfig.routerAddress || 'Not set - add after deployment');
+    console.log('Factory address:', this.dexConfig.factoryAddress || 'Not set - add after deployment');
   }
 
   async getSwapQuote(params: SwapParams): Promise<SwapQuote | null> {
-    if (!this.router || !this.provider) {
-      throw new Error('Uniswap service not initialized');
+    if (!this.provider) {
+      throw new Error('DEX service not initialized');
     }
 
+    if (!this.dexConfig?.routerAddress) {
+      console.warn('Router contract not deployed yet - returning mock quote');
+      return this.getMockQuote(params);
+    }
+
+    try {
+      // This is where you'll implement the actual swap quote logic
+      // using your deployed contracts and the Uniswap SDK for calculations
+      return await this.getActualQuote(params);
+    } catch (error) {
+      console.error('Error getting swap quote:', error);
+      return null;
+    }
+  }
+
+  private getMockQuote(params: SwapParams): SwapQuote {
+    // Mock calculation for testing before contracts are deployed
+    const mockRate = 0.000625; // Mock ETH/BTC rate
+    const amountOut = (parseFloat(params.amountIn) * mockRate).toFixed(6);
+    
+    return {
+      amountOut,
+      priceImpact: 0.1,
+      gasEstimate: '150000',
+      route: null,
+      methodParameters: null
+    };
+  }
+
+  private async getActualQuote(params: SwapParams): Promise<SwapQuote | null> {
+    // This method will use your deployed contracts
+    // You can implement the actual quote calculation here using:
+    // 1. Uniswap SDK for mathematical calculations
+    // 2. Your contract addresses for routing
+    // 3. Your fee structure
+    
     try {
       // Create token instances
       const tokenIn = new Token(
         this.chainId,
         params.tokenIn,
-        18, // We'll need to fetch actual decimals in production
+        18, // You'll need to fetch actual decimals
         'TokenIn'
       );
 
       const tokenOut = new Token(
         this.chainId,
         params.tokenOut,
-        18, // We'll need to fetch actual decimals in production
+        18, // You'll need to fetch actual decimals
         'TokenOut'
       );
 
@@ -112,67 +161,88 @@ export class UniswapService {
         ethers.utils.parseUnits(params.amountIn, 18).toString()
       );
 
-      // Get route with correct options for Universal Router
-      const route = await this.router.route(
-        amountIn,
-        tokenOut,
-        TradeType.EXACT_INPUT,
-        {
-          recipient: params.recipient,
-          slippageTolerance: new Percent(Math.floor(params.slippageTolerance * 100), 10000),
-          type: SwapType.UNIVERSAL_ROUTER,
-          version: '1.0.0' // Add required version property
-        }
-      );
-
-      if (!route) {
-        console.log('No route found');
-        return null;
-      }
-
-      const amountOut = route.quote.toExact();
-      const priceImpact = route.estimatedGasUsed ? parseFloat(route.estimatedGasUsed.toString()) / 1000000 : 0;
-
+      // Here you would:
+      // 1. Query your factory contract for pair existence
+      // 2. Get reserves from your pair contracts
+      // 3. Calculate output amount using Uniswap's math libraries
+      // 4. Apply your fee structure
+      
+      // For now, return a placeholder
+      const amountOut = '0';
+      
       return {
         amountOut,
-        priceImpact,
-        gasEstimate: route.estimatedGasUsed?.toString() || '0',
-        route: route.route,
-        methodParameters: route.methodParameters
+        priceImpact: 0,
+        gasEstimate: '0',
+        route: null,
+        methodParameters: null
       };
 
     } catch (error) {
-      console.error('Error getting swap quote:', error);
+      console.error('Error in actual quote calculation:', error);
       return null;
     }
   }
 
   async executeSwap(params: SwapParams, walletClient: any): Promise<string | null> {
+    if (!this.dexConfig?.routerAddress) {
+      throw new Error('Router contract not deployed yet');
+    }
+
     const quote = await this.getSwapQuote(params);
     
-    if (!quote || !quote.methodParameters) {
+    if (!quote) {
       throw new Error('Unable to get swap quote');
     }
 
     try {
-      // Convert walletClient to ethers signer for compatibility
+      // Convert walletClient to ethers signer
       const provider = new ethers.providers.Web3Provider(walletClient);
       const signer = provider.getSigner();
 
-      const transaction = {
-        to: quote.methodParameters.to,
-        data: quote.methodParameters.calldata,
-        value: quote.methodParameters.value,
-        gasLimit: ethers.BigNumber.from(quote.gasEstimate).mul(120).div(100) // 20% buffer
-      };
+      // Here you'll interact with your deployed router contract
+      // Example structure:
+      const routerContract = new ethers.Contract(
+        this.dexConfig.routerAddress,
+        [], // Your router ABI will go here
+        signer
+      );
 
-      const txResponse = await signer.sendTransaction(transaction);
-      console.log('Swap transaction sent:', txResponse.hash);
+      // Call your router's swap function
+      // const txResponse = await routerContract.swapExactTokensForTokens(
+      //   amountIn,
+      //   amountOutMin,
+      //   path,
+      //   recipient,
+      //   deadline
+      // );
+
+      console.log('Swap will be executed when router contract is deployed');
+      return null; // Return null until contracts are deployed
       
-      return txResponse.hash;
     } catch (error) {
       console.error('Error executing swap:', error);
       return null;
+    }
+  }
+
+  // Method to update contract addresses after deployment
+  updateContractAddresses(routerAddress: string, factoryAddress: string) {
+    if (this.dexConfig) {
+      this.dexConfig.routerAddress = routerAddress;
+      this.dexConfig.factoryAddress = factoryAddress;
+      console.log('Contract addresses updated:', {
+        router: routerAddress,
+        factory: factoryAddress
+      });
+    }
+  }
+
+  // Method to update fee structure
+  updateFeePercent(feePercent: number) {
+    if (this.dexConfig) {
+      this.dexConfig.swapFeePercent = feePercent;
+      console.log('Fee percent updated to:', feePercent);
     }
   }
 
@@ -186,8 +256,16 @@ export class UniswapService {
   getSupportedChains(): number[] {
     return Object.keys(CHAIN_CONFIGS).map(Number);
   }
+
+  isContractsDeployed(): boolean {
+    return !!(this.dexConfig?.routerAddress && this.dexConfig?.factoryAddress);
+  }
+
+  getDexConfig(): DexConfig | null {
+    return this.dexConfig;
+  }
 }
 
-export const uniswapService = new UniswapService();
+export const dexService = new DexService();
 
-export default uniswapService;
+export default dexService;

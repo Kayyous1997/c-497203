@@ -7,7 +7,7 @@ import { ArrowDown, ChevronDown, Settings, Info, AlertTriangle, Loader2 } from "
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Label } from "@/components/ui/label";
 import TokenSelectorModal from "./TokenSelectorModal";
-import { useUniswap } from "@/hooks/useUniswap";
+import { useDex } from "@/hooks/useUniswap";
 import { useToast } from "@/hooks/use-toast";
 
 interface Token {
@@ -23,13 +23,14 @@ const SwapInterface = () => {
   const { toast } = useToast();
   const { 
     isInitialized, 
-    isLoading: uniswapLoading, 
+    isLoading: dexLoading, 
     quote, 
+    contractsDeployed,
     getQuote, 
     executeSwap, 
     getTokenAddress,
     currentChainId 
-  } = useUniswap();
+  } = useDex();
 
   const [fromAmount, setFromAmount] = useState("");
   const [toAmount, setToAmount] = useState("");
@@ -71,7 +72,7 @@ const SwapInterface = () => {
 
   // Get real quote when amount or tokens change
   useEffect(() => {
-    const getUniswapQuote = async () => {
+    const getDexQuote = async () => {
       if (!fromAmount || !isInitialized || !fromToken.address || !toToken.address || fromToken.address === "0x..." || toToken.address === "0x...") {
         setToAmount("");
         return;
@@ -104,7 +105,7 @@ const SwapInterface = () => {
       }
     };
 
-    const timeoutId = setTimeout(getUniswapQuote, 500); // Debounce
+    const timeoutId = setTimeout(getDexQuote, 500); // Debounce
     return () => clearTimeout(timeoutId);
   }, [fromAmount, fromToken.address, toToken.address, slippageTolerance, customSlippage, isCustomSlippage, getQuote, isInitialized, toast]);
 
@@ -190,7 +191,16 @@ const SwapInterface = () => {
     if (!isInitialized) {
       toast({
         title: "Network Not Supported",
-        description: "Uniswap is not available on this network",
+        description: "DEX is not available on this network",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!contractsDeployed) {
+      toast({
+        title: "Contracts Not Deployed",
+        description: "Deploy your DEX contracts first to enable swapping",
         variant: "destructive"
       });
       return;
@@ -224,15 +234,16 @@ const SwapInterface = () => {
   const getSwapButtonText = () => {
     if (!isConnected) return "Connect Wallet";
     if (!isInitialized) return "Network Not Supported";
+    if (!contractsDeployed) return "Deploy Contracts First";
     if (!fromAmount) return "Enter Amount";
-    if (isGettingQuote || uniswapLoading) return "Loading...";
+    if (isGettingQuote || dexLoading) return "Loading...";
     if (!toAmount) return "Invalid Pair";
     if (priceImpact > 3) return "Swap Anyway";
     return "Swap";
   };
 
   const isSwapDisabled = () => {
-    return !isConnected || !isInitialized || !fromAmount || !toAmount || isGettingQuote || uniswapLoading;
+    return !isConnected || !isInitialized || !contractsDeployed || !fromAmount || !toAmount || isGettingQuote || dexLoading;
   };
 
   return (
@@ -287,10 +298,17 @@ const SwapInterface = () => {
           </Popover>
         </div>
 
+        {!contractsDeployed && isConnected && isInitialized && (
+          <div className="mb-4 p-3 bg-blue-500/10 rounded-lg flex items-center gap-2 text-blue-600">
+            <Info className="h-4 w-4" />
+            <span className="text-sm">Your DEX contracts are not deployed yet. You can test with mock quotes.</span>
+          </div>
+        )}
+
         {!isInitialized && isConnected && (
           <div className="mb-4 p-3 bg-yellow-500/10 rounded-lg flex items-center gap-2 text-yellow-600">
             <AlertTriangle className="h-4 w-4" />
-            <span className="text-sm">Uniswap is not available on this network</span>
+            <span className="text-sm">DEX is not available on this network</span>
           </div>
         )}
 
@@ -379,6 +397,7 @@ const SwapInterface = () => {
               {toAmount && (
                 <div className="text-sm text-muted-foreground mt-1">
                   ≈ ${(Number(toAmount) * toToken.price).toLocaleString()}
+                  {!contractsDeployed && <span className="ml-2 text-blue-500">(Mock)</span>}
                 </div>
               )}
             </CardContent>
@@ -444,7 +463,7 @@ const SwapInterface = () => {
             disabled={isSwapDisabled()}
             variant={priceImpact > 3 ? "destructive" : "default"}
           >
-            {uniswapLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            {dexLoading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
             {getSwapButtonText()}
           </Button>
         </div>
@@ -469,3 +488,5 @@ const SwapInterface = () => {
 };
 
 export default SwapInterface;
+
+</edits_to_apply>

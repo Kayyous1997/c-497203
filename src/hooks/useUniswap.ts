@@ -1,10 +1,9 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { useAccount, useChainId, useWalletClient } from 'wagmi';
-import { uniswapService, SwapParams, SwapQuote } from '@/services/uniswapService';
+import { dexService, SwapParams, SwapQuote, DexConfig } from '@/services/uniswapService';
 import { useToast } from '@/hooks/use-toast';
 
-export const useUniswap = () => {
+export const useDex = () => {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { data: walletClient } = useWalletClient();
@@ -13,20 +12,22 @@ export const useUniswap = () => {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [quote, setQuote] = useState<SwapQuote | null>(null);
+  const [contractsDeployed, setContractsDeployed] = useState(false);
 
-  // Initialize Uniswap service when chain changes
+  // Initialize DEX service when chain changes
   useEffect(() => {
     const initializeService = async () => {
       if (chainId) {
         try {
-          await uniswapService.initialize(chainId);
+          await dexService.initialize(chainId);
           setIsInitialized(true);
-          console.log('Uniswap service initialized for chain:', chainId);
+          setContractsDeployed(dexService.isContractsDeployed());
+          console.log('DEX service initialized for chain:', chainId);
         } catch (error) {
-          console.error('Failed to initialize Uniswap service:', error);
+          console.error('Failed to initialize DEX service:', error);
           toast({
             title: "Network Not Supported",
-            description: `Uniswap is not available on this network`,
+            description: `DEX is not available on this network`,
             variant: "destructive"
           });
           setIsInitialized(false);
@@ -55,8 +56,17 @@ export const useUniswap = () => {
         chainId: chainId
       };
 
-      const result = await uniswapService.getSwapQuote(fullParams);
+      const result = await dexService.getSwapQuote(fullParams);
       setQuote(result);
+      
+      if (!contractsDeployed && result) {
+        toast({
+          title: "Mock Quote",
+          description: "This is a test quote. Deploy your contracts for real trading.",
+          variant: "default"
+        });
+      }
+      
       return result;
     } catch (error) {
       console.error('Error getting quote:', error);
@@ -69,13 +79,22 @@ export const useUniswap = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isInitialized, address, chainId, toast]);
+  }, [isInitialized, address, chainId, contractsDeployed, toast]);
 
   const executeSwap = useCallback(async (params: Omit<SwapParams, 'recipient' | 'chainId'>) => {
     if (!isInitialized || !address || !chainId || !walletClient) {
       toast({
         title: "Not Ready",
         description: "Please connect your wallet and ensure the network is supported",
+        variant: "destructive"
+      });
+      return null;
+    }
+
+    if (!contractsDeployed) {
+      toast({
+        title: "Contracts Not Deployed",
+        description: "Please deploy your DEX contracts first before executing swaps.",
         variant: "destructive"
       });
       return null;
@@ -89,7 +108,7 @@ export const useUniswap = () => {
         chainId: chainId
       };
 
-      const txHash = await uniswapService.executeSwap(fullParams, walletClient);
+      const txHash = await dexService.executeSwap(fullParams, walletClient);
       
       if (txHash) {
         toast({
@@ -116,21 +135,45 @@ export const useUniswap = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isInitialized, address, chainId, walletClient, toast]);
+  }, [isInitialized, address, chainId, walletClient, contractsDeployed, toast]);
+
+  const updateContractAddresses = useCallback((routerAddress: string, factoryAddress: string) => {
+    dexService.updateContractAddresses(routerAddress, factoryAddress);
+    setContractsDeployed(true);
+    toast({
+      title: "Contracts Updated",
+      description: "DEX contract addresses have been updated successfully.",
+    });
+  }, [toast]);
+
+  const updateFeePercent = useCallback((feePercent: number) => {
+    dexService.updateFeePercent(feePercent);
+    toast({
+      title: "Fee Updated",
+      description: `DEX fee updated to ${feePercent}%`,
+    });
+  }, [toast]);
 
   const getTokenAddress = useCallback((symbol: string) => {
     if (!chainId) return null;
-    return uniswapService.getTokenAddress(symbol, chainId);
+    return dexService.getTokenAddress(symbol, chainId);
   }, [chainId]);
 
   return {
     isInitialized,
     isLoading,
     quote,
+    contractsDeployed,
     getQuote,
     executeSwap,
     getTokenAddress,
-    supportedChains: uniswapService.getSupportedChains(),
-    currentChainId: chainId
+    updateContractAddresses,
+    updateFeePercent,
+    supportedChains: dexService.getSupportedChains(),
+    currentChainId: chainId,
+    dexConfig: dexService.getDexConfig()
   };
 };
+
+// Keep the old export for backwards compatibility
+export const useUniswap = useDex;
