@@ -489,4 +489,4 @@ const SwapInterface = () => {
 
 export default SwapInterface;
 
-</edits_to_apply>
+}
