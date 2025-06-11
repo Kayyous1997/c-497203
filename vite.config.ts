@@ -1,3 +1,4 @@
+
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
@@ -18,4 +19,12 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  define: {
+    global: 'globalThis',
+    'process.env': {},
+    Browser: 'undefined',
+  },
+  optimizeDeps: {
+    include: ['@uniswap/smart-order-router', '@uniswap/sdk-core']
+  }
 }));

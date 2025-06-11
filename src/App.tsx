@@ -15,9 +15,11 @@ const App = () => (
       <BrowserRouter>
         <div className="min-h-screen flex flex-col w-full">
           <Header />
-          <Routes>
-            <Route path="/" element={<Index />} />
-          </Routes>
+          <main className="flex-1">
+            <Routes>
+              <Route path="/" element={<Index />} />
+            </Routes>
+          </main>
         </div>
       </BrowserRouter>
     </TooltipProvider>
