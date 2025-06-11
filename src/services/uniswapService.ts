@@ -1,3 +1,4 @@
+
 import { Token, CurrencyAmount, TradeType, Percent } from '@uniswap/sdk-core';
 import { AlphaRouter, SwapType } from '@uniswap/smart-order-router';
 import { ethers } from 'ethers';
@@ -119,7 +120,8 @@ export class UniswapService {
         {
           recipient: params.recipient,
           slippageTolerance: new Percent(Math.floor(params.slippageTolerance * 100), 10000),
-          type: SwapType.UNIVERSAL_ROUTER
+          type: SwapType.UNIVERSAL_ROUTER,
+          version: '1.0.0' // Add required version property
         }
       );
 
