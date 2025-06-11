@@ -488,5 +488,3 @@ const SwapInterface = () => {
 };
 
 export default SwapInterface;
-
-}
