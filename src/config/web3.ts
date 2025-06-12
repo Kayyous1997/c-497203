@@ -38,7 +38,7 @@ const abstractTestnet = {
 } as const
 
 const monadTestnet = {
-  id: 41454,
+  id: 10143,
   name: 'Monad Testnet',
   nativeCurrency: {
     decimals: 18,
@@ -54,7 +54,7 @@ const monadTestnet = {
     },
   },
   blockExplorers: {
-    default: { name: 'Monad Explorer', url: 'https://testnet-explorer.monad.xyz' },
+    default: { name: 'Monad Explorer', url: 'https://testnet.monadexplorer.com' },
   },
   testnet: true,
 } as const
