@@ -1,35 +1,21 @@
 
 import { useState } from "react";
-import { useAccount, useSwitchChain } from "wagmi";
+import { useAccount } from "wagmi";
 import { useWeb3Modal } from "@web3modal/wagmi/react";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Wallet, ChevronDown } from "lucide-react";
+import { Wallet, ChevronDown, Globe } from "lucide-react";
 
 const Header = () => {
   const { open } = useWeb3Modal();
   const { address, isConnected, chain } = useAccount();
-  const { switchChain } = useSwitchChain();
-
-  const networks = [
-    { id: 1, name: "Ethereum", symbol: "ETH" },
-    { id: 8453, name: "Base", symbol: "ETH" },
-    { id: 59144, name: "Linea Testnet", symbol: "ETH" },
-    { id: 11124, name: "Abstract Testnet", symbol: "ETH" },
-    { id: 41454, name: "Monad Testnet", symbol: "MON" },
-  ];
 
   const formatAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
-  const handleNetworkChange = (chainId: string) => {
-    switchChain({ chainId: parseInt(chainId) });
-  };
-
-  const getCurrentNetwork = () => {
-    return networks.find(network => network.id === chain?.id);
+  const openNetworkModal = () => {
+    open({ view: 'Networks' });
   };
 
   return (
@@ -43,31 +29,17 @@ const Header = () => {
 
           {/* Right side - Network selector and wallet */}
           <div className="flex items-center space-x-4">
-            {/* Network Selector */}
+            {/* Network Selector using AppKit */}
             {isConnected && (
-              <Select 
-                value={chain?.id?.toString() || ""} 
-                onValueChange={handleNetworkChange}
+              <Button
+                variant="outline"
+                onClick={openNetworkModal}
+                className="flex items-center space-x-2 bg-muted/20"
               >
-                <SelectTrigger className="w-48 bg-muted/20">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    <SelectValue placeholder="Select Network">
-                      {getCurrentNetwork()?.name || "Unknown Network"}
-                    </SelectValue>
-                  </div>
-                </SelectTrigger>
-                <SelectContent>
-                  {networks.map((network) => (
-                    <SelectItem key={network.id} value={network.id.toString()}>
-                      <div className="flex items-center space-x-2">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                        <span>{network.name}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <Globe className="h-4 w-4" />
+                <span>{chain?.name || "Unknown Network"}</span>
+                <ChevronDown className="h-3 w-3" />
+              </Button>
             )}
 
             {/* Wallet Connection */}
