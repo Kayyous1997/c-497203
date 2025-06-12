@@ -18,6 +18,8 @@ export function WalletConnect() {
     address: address,
   })
 
+  console.log('WalletConnect - isConnected:', isConnected, 'address:', address)
+
   const formatAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`
   }
@@ -47,6 +49,7 @@ export function WalletConnect() {
   }
 
   const handleDisconnect = () => {
+    console.log('Disconnecting wallet...')
     disconnect()
     toast({
       title: "Wallet Disconnected",
@@ -54,39 +57,40 @@ export function WalletConnect() {
     })
   }
 
+  const handleManageWallet = () => {
+    console.log('Opening wallet management...')
+    open({ view: 'Account' })
+  }
+
   if (isConnected && address) {
     return (
       <Popover>
         <PopoverTrigger asChild>
-          <Card className="bg-secondary/20 border-muted/20 cursor-pointer hover:bg-secondary/30 transition-colors">
-            <CardContent className="p-3">
-              <div className="flex items-center space-x-2">
-                <Wallet className="h-4 w-4" />
-                <span className="text-sm font-medium">
-                  {formatAddress(address)}
-                </span>
-                <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <Button variant="outline" className="bg-secondary/20 border-muted/20 hover:bg-secondary/30 transition-colors">
+            <div className="flex items-center space-x-2">
+              <Wallet className="h-4 w-4" />
+              <span className="text-sm font-medium">
+                {formatAddress(address)}
+              </span>
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+            </div>
+          </Button>
         </PopoverTrigger>
         <PopoverContent className="w-80" align="end">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="font-medium">Wallet</h4>
+              <h4 className="font-medium">Connected Wallet</h4>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleDisconnect}
-                className="text-red-500 hover:text-red-600"
+                className="text-red-500 hover:text-red-600 hover:bg-red-50"
               >
                 <LogOut className="h-4 w-4" />
               </Button>
             </div>
             
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Address</span>
                 <div className="flex items-center space-x-2">
@@ -95,7 +99,7 @@ export function WalletConnect() {
                     variant="ghost"
                     size="sm"
                     onClick={copyAddress}
-                    className="h-6 w-6 p-0"
+                    className="h-6 w-6 p-0 hover:bg-muted"
                   >
                     <Copy className="h-3 w-3" />
                   </Button>
@@ -136,13 +140,23 @@ export function WalletConnect() {
               </Button>
             </div>
             
-            <Button
-              variant="outline"
-              onClick={() => open({ view: 'Account' })}
-              className="w-full"
-            >
-              Manage Wallet
-            </Button>
+            <div className="flex space-x-2">
+              <Button
+                variant="outline"
+                onClick={handleManageWallet}
+                className="flex-1"
+              >
+                Manage Wallet
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDisconnect}
+                className="flex-1"
+              >
+                <LogOut className="h-4 w-4 mr-1" />
+                Disconnect
+              </Button>
+            </div>
           </div>
         </PopoverContent>
       </Popover>
