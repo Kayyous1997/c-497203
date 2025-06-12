@@ -1,14 +1,15 @@
-
 import { useState } from "react";
 import { useAccount } from "wagmi";
 import { useWeb3Modal } from "@web3modal/wagmi/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Wallet, ChevronDown, Globe } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
 
 const Header = () => {
   const { open } = useWeb3Modal();
   const { address, isConnected, chain } = useAccount();
+  const location = useLocation();
 
   const formatAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
@@ -18,13 +19,35 @@ const Header = () => {
     open({ view: 'Networks' });
   };
 
+  const navigation = [
+    { name: 'Swap', href: '/' },
+    { name: 'Liquidity', href: '/liquidity' }
+  ];
+
   return (
     <header className="w-full bg-background/80 backdrop-blur-sm border-b border-muted/20 sticky top-0 z-50">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
-          {/* Logo/Title */}
-          <div className="flex items-center space-x-2">
+          {/* Logo/Title and Navigation */}
+          <div className="flex items-center space-x-8">
             <h1 className="text-xl font-bold">Crypto Dashboard</h1>
+            
+            {/* Navigation Links */}
+            <nav className="hidden md:flex space-x-6">
+              {navigation.map((item) => (
+                <Link
+                  key={item.name}
+                  to={item.href}
+                  className={`text-sm font-medium transition-colors hover:text-primary ${
+                    location.pathname === item.href
+                      ? 'text-primary border-b-2 border-primary pb-1'
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  {item.name}
+                </Link>
+              ))}
+            </nav>
           </div>
 
           {/* Right side - Network selector and wallet */}
