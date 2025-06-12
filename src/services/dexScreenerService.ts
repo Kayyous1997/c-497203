@@ -121,7 +121,10 @@ class DexScreenerService {
     }
   }
 
-  formatPercentage(percentage: number): string {
+  formatPercentage(percentage: number | null | undefined): string {
+    if (percentage === null || percentage === undefined || isNaN(percentage)) {
+      return 'N/A';
+    }
     const sign = percentage >= 0 ? '+' : '';
     return `${sign}${percentage.toFixed(2)}%`;
   }
