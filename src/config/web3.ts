@@ -1,6 +1,6 @@
 
 import { defaultWagmiConfig } from '@web3modal/wagmi/react/config'
-import { mainnet, base, lineaTestnet } from 'wagmi/chains'
+import { mainnet, sepolia, baseGoerli, base, arbitrumGoerli, arbitrum, lineaTestnet } from 'wagmi/chains'
 
 // Get projectId from https://cloud.walletconnect.com
 export const projectId = '535acf9f46f8f279f492a746b1ec219a'
@@ -60,7 +60,7 @@ const monadTestnet = {
 } as const
 
 // Create wagmiConfig
-const chains = [mainnet, base, lineaTestnet, abstractTestnet, monadTestnet] as const
+const chains = [mainnet, sepolia, baseGoerli, base, arbitrumGoerli, arbitrum, lineaTestnet, abstractTestnet, monadTestnet] as const
 export const config = defaultWagmiConfig({
   chains,
   projectId,
