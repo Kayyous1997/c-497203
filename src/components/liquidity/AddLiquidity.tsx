@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -13,10 +14,13 @@ import TokenSelectorModal from '@/components/TokenSelectorModal';
 // Use the same Token interface as TokenSelectorModal expects
 interface Token {
   symbol: string;
-  address: string;
   name: string;
-  decimals: number;
-  logoURI?: string;
+  address: string;
+  icon: string;
+  price: number;
+  volume24h?: number;
+  logoUrl?: string;
+  logoSource?: string;
 }
 
 const AddLiquidity = () => {
@@ -191,8 +195,10 @@ const AddLiquidity = () => {
             >
               {tokenA ? (
                 <div className="flex items-center space-x-2">
-                  {tokenA.logoURI && (
-                    <img src={tokenA.logoURI} alt={tokenA.symbol} className="w-5 h-5 rounded-full" />
+                  {tokenA.logoUrl ? (
+                    <img src={tokenA.logoUrl} alt={tokenA.symbol} className="w-5 h-5 rounded-full" />
+                  ) : (
+                    <span>{tokenA.icon}</span>
                   )}
                   <span>{tokenA.symbol}</span>
                 </div>
@@ -225,8 +231,10 @@ const AddLiquidity = () => {
             >
               {tokenB ? (
                 <div className="flex items-center space-x-2">
-                  {tokenB.logoURI && (
-                    <img src={tokenB.logoURI} alt={tokenB.symbol} className="w-5 h-5 rounded-full" />
+                  {tokenB.logoUrl ? (
+                    <img src={tokenB.logoUrl} alt={tokenB.symbol} className="w-5 h-5 rounded-full" />
+                  ) : (
+                    <span>{tokenB.icon}</span>
                   )}
                   <span>{tokenB.symbol}</span>
                 </div>
@@ -282,17 +290,17 @@ const AddLiquidity = () => {
 
         {/* Token Selector Modals */}
         <TokenSelectorModal
-          isOpen={isTokenAModalOpen}
-          onClose={() => setIsTokenAModalOpen(false)}
+          open={isTokenAModalOpen}
+          onOpenChange={setIsTokenAModalOpen}
           onSelectToken={handleTokenASelect}
-          excludeToken={tokenB?.address}
+          selectedToken={tokenB?.address}
         />
         
         <TokenSelectorModal
-          isOpen={isTokenBModalOpen}
-          onClose={() => setIsTokenBModalOpen(false)}
+          open={isTokenBModalOpen}
+          onOpenChange={setIsTokenBModalOpen}
           onSelectToken={handleTokenBSelect}
-          excludeToken={tokenA?.address}
+          selectedToken={tokenA?.address}
         />
       </CardContent>
     </Card>
