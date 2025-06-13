@@ -4,6 +4,7 @@ import { useAccount, useChainId, useWalletClient } from 'wagmi';
 import { dexService } from '@/services/dexService';
 import { SwapParams, SwapQuote } from '@/services/dexService';
 import { useToast } from '@/hooks/use-toast';
+import { getTokenAddress } from '@/contracts/chainConfigs';
 
 export const useDex = () => {
   const { address, isConnected } = useAccount();
@@ -189,6 +190,11 @@ export const useDex = () => {
     }
   }, [contractsDeployed, toast]);
 
+  const getTokenAddressForChain = useCallback((symbol: string) => {
+    if (!chainId) return null;
+    return getTokenAddress(chainId, symbol);
+  }, [chainId]);
+
   return {
     isInitialized,
     isLoading,
@@ -198,6 +204,7 @@ export const useDex = () => {
     executeSwap,
     updateContractAddresses,
     createPool,
+    getTokenAddress: getTokenAddressForChain,
     supportedChains: dexService.getSupportedChains(),
     currentChainId: chainId,
     dexConfig: dexService.getContractAddresses()

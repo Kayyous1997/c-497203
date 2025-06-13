@@ -74,22 +74,22 @@ const ContractManager = () => {
                 <Label className="text-sm font-medium">Router Contract</Label>
                 <div className="flex items-center gap-2 mt-1">
                   <Input
-                    value={dexConfig?.routerAddress || ''}
+                    value={dexConfig?.router || ''}
                     readOnly
                     className="bg-muted/50"
                   />
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => copyToClipboard(dexConfig?.routerAddress || '', 'Router address')}
+                    onClick={() => copyToClipboard(dexConfig?.router || '', 'Router address')}
                   >
                     <Copy className="h-4 w-4" />
                   </Button>
-                  {dexConfig?.routerAddress && getExplorerUrl(dexConfig.routerAddress) && (
+                  {dexConfig?.router && getExplorerUrl(dexConfig.router) && (
                     <Button
                       variant="outline"
                       size="icon"
-                      onClick={() => window.open(getExplorerUrl(dexConfig.routerAddress), '_blank')}
+                      onClick={() => window.open(getExplorerUrl(dexConfig.router), '_blank')}
                     >
                       <ExternalLink className="h-4 w-4" />
                     </Button>
@@ -101,22 +101,22 @@ const ContractManager = () => {
                 <Label className="text-sm font-medium">Factory Contract</Label>
                 <div className="flex items-center gap-2 mt-1">
                   <Input
-                    value={dexConfig?.factoryAddress || ''}
+                    value={dexConfig?.factory || ''}
                     readOnly
                     className="bg-muted/50"
                   />
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={() => copyToClipboard(dexConfig?.factoryAddress || '', 'Factory address')}
+                    onClick={() => copyToClipboard(dexConfig?.factory || '', 'Factory address')}
                   >
                     <Copy className="h-4 w-4" />
                   </Button>
-                  {dexConfig?.factoryAddress && getExplorerUrl(dexConfig.factoryAddress) && (
+                  {dexConfig?.factory && getExplorerUrl(dexConfig.factory) && (
                     <Button
                       variant="outline"
                       size="icon"
-                      onClick={() => window.open(getExplorerUrl(dexConfig.factoryAddress), '_blank')}
+                      onClick={() => window.open(getExplorerUrl(dexConfig.factory), '_blank')}
                     >
                       <ExternalLink className="h-4 w-4" />
                     </Button>
@@ -127,7 +127,7 @@ const ContractManager = () => {
               <div>
                 <Label className="text-sm font-medium">Swap Fee</Label>
                 <Input
-                  value={`${dexConfig?.swapFeePercent || 0.3}%`}
+                  value="0.3%"
                   readOnly
                   className="bg-muted/50 mt-1"
                 />
@@ -137,8 +137,8 @@ const ContractManager = () => {
             <Button
               variant="outline"
               onClick={() => validateContractDeployment(
-                dexConfig?.routerAddress || '',
-                dexConfig?.factoryAddress || ''
+                dexConfig?.router || '',
+                dexConfig?.factory || ''
               )}
               className="w-full"
             >

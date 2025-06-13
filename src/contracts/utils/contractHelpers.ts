@@ -38,6 +38,54 @@ export class ContractHelpers {
     return this.contractManager.approveToken(tokenAddress, spender, amount);
   }
 
+  // Router contract methods
+  getRouterContract() {
+    return this.contractManager.getRouterContract();
+  }
+
+  // Factory contract methods  
+  getFactoryContract() {
+    return this.contractManager.getFactoryContract();
+  }
+
+  // Get amounts out for swap quote
+  async getAmountsOut(amountIn: ethers.BigNumber, path: string[]): Promise<ethers.BigNumber[]> {
+    const router = this.contractManager.getRouterContract();
+    return await router.getAmountsOut(amountIn, path);
+  }
+
+  // Get pair address
+  async getPairAddress(tokenA: string, tokenB: string): Promise<string> {
+    const factory = this.contractManager.getFactoryContract();
+    return await factory.getPair(tokenA, tokenB);
+  }
+
+  // Get pair reserves
+  async getPairReserves(pairAddress: string): Promise<{reserve0: ethers.BigNumber, reserve1: ethers.BigNumber}> {
+    const pair = this.contractManager.getPoolContract(pairAddress);
+    const reserves = await pair.getReserves();
+    return { reserve0: reserves._reserve0, reserve1: reserves._reserve1 };
+  }
+
+  // Get pair contract
+  getPairContract(pairAddress: string) {
+    return this.contractManager.getPoolContract(pairAddress);
+  }
+
+  // Execute swap
+  async swapExactTokensForTokens(
+    amountIn: ethers.BigNumber,
+    amountOutMin: ethers.BigNumber,
+    path: string[],
+    to: string,
+    deadline: number,
+    signer: ethers.Signer
+  ): Promise<ethers.ContractTransaction> {
+    this.contractManager.updateSigner(signer);
+    const router = this.contractManager.getRouterContract(true);
+    return await router.swapExactTokensForTokens(amountIn, amountOutMin, path, to, deadline);
+  }
+
   // Add other legacy methods as needed for backwards compatibility
   calculatePriceImpact(
     amountIn: ethers.BigNumber,
