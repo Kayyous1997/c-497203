@@ -96,7 +96,7 @@ const PoolCreator = () => {
     }
   };
 
-  const poolExists = tokenA && tokenB; // In real implementation, check if pool already exists
+  const poolExists = Boolean(tokenA && tokenB); // Convert to boolean properly
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
