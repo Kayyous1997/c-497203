@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,6 +10,7 @@ import { useLiquidity } from '@/hooks/useLiquidity';
 import { useToast } from '@/hooks/use-toast';
 import TokenSelectorModal from '@/components/TokenSelectorModal';
 
+// Use the same Token interface as TokenSelectorModal expects
 interface Token {
   symbol: string;
   address: string;

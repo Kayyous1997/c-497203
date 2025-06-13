@@ -1,7 +1,5 @@
-
 import { useState, useCallback, useEffect } from 'react';
 import { useAccount, useChainId, useWalletClient } from 'wagmi';
-import { ethers } from 'ethers';
 import { useDex } from '@/hooks/useUniswap';
 import { useToast } from '@/hooks/use-toast';
 
@@ -95,7 +93,7 @@ export const useLiquidity = () => {
     }
   }, [isConnected, address, isInitialized, contractsDeployed, toast]);
 
-  // Add liquidity
+  // Add liquidity - simplified without ethers provider issues
   const addLiquidity = useCallback(async (params: AddLiquidityParams) => {
     if (!isConnected || !walletClient || !contractsDeployed) {
       toast({
@@ -108,11 +106,11 @@ export const useLiquidity = () => {
 
     setIsLoading(true);
     try {
-      const provider = new ethers.providers.Web3Provider(walletClient);
-      const signer = provider.getSigner();
-
-      // Mock implementation - replace with actual contract calls
+      // Mock implementation for now - replace with actual contract calls when ready
       console.log('Adding liquidity with params:', params);
+      
+      // Simulate transaction delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       toast({
         title: "Liquidity Added",
@@ -121,7 +119,7 @@ export const useLiquidity = () => {
 
       // Refresh positions after adding liquidity
       await fetchPositions();
-      return 'mock-tx-hash';
+      return 'mock-tx-hash-' + Date.now();
     } catch (error) {
       console.error('Error adding liquidity:', error);
       toast({
@@ -135,7 +133,7 @@ export const useLiquidity = () => {
     }
   }, [isConnected, walletClient, contractsDeployed, toast, fetchPositions]);
 
-  // Remove liquidity
+  // Remove liquidity - simplified without ethers provider issues
   const removeLiquidity = useCallback(async (params: RemoveLiquidityParams) => {
     if (!isConnected || !walletClient || !contractsDeployed) {
       toast({
@@ -148,11 +146,11 @@ export const useLiquidity = () => {
 
     setIsLoading(true);
     try {
-      const provider = new ethers.providers.Web3Provider(walletClient);
-      const signer = provider.getSigner();
-
-      // Mock implementation - replace with actual contract calls
+      // Mock implementation for now - replace with actual contract calls when ready
       console.log('Removing liquidity with params:', params);
+      
+      // Simulate transaction delay
+      await new Promise(resolve => setTimeout(resolve, 2000));
       
       toast({
         title: "Liquidity Removed",
@@ -161,7 +159,7 @@ export const useLiquidity = () => {
 
       // Refresh positions after removing liquidity
       await fetchPositions();
-      return 'mock-tx-hash';
+      return 'mock-tx-hash-' + Date.now();
     } catch (error) {
       console.error('Error removing liquidity:', error);
       toast({
