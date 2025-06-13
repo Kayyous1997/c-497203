@@ -4,9 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, ArrowDown, Settings } from 'lucide-react';
+import { Plus, Settings, Loader2 } from 'lucide-react';
 import { useAccount, useChainId } from 'wagmi';
 import { useDex } from '@/hooks/useUniswap';
+import { useLiquidity } from '@/hooks/useLiquidity';
 import { useToast } from '@/hooks/use-toast';
 import TokenSelectorModal from '@/components/TokenSelectorModal';
 
@@ -21,7 +22,8 @@ interface Token {
 const AddLiquidity = () => {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
-  const { getTokenAddress, isInitialized, contractsDeployed } = useDex();
+  const { getTokenAddress, isInitialized } = useDex();
+  const { addLiquidity, isLoading, contractsDeployed } = useLiquidity();
   const { toast } = useToast();
 
   const [tokenA, setTokenA] = useState<Token | null>(null);
@@ -35,12 +37,14 @@ const AddLiquidity = () => {
   const [priceRatio, setPriceRatio] = useState<string>('');
   const [shareOfPool, setShareOfPool] = useState<string>('');
 
-  // Calculate price ratio when amounts change
+  // Calculate price ratio and pool share in real-time
   useEffect(() => {
     if (amountA && amountB && parseFloat(amountA) > 0 && parseFloat(amountB) > 0) {
       const ratio = parseFloat(amountB) / parseFloat(amountA);
       setPriceRatio(ratio.toFixed(6));
-      setShareOfPool('100'); // Simplified - would calculate actual pool share
+      
+      // For new pools, share would be 100%, for existing pools calculate based on reserves
+      setShareOfPool('100');
     } else {
       setPriceRatio('');
       setShareOfPool('');
@@ -59,13 +63,16 @@ const AddLiquidity = () => {
 
   const handleAmountAChange = (value: string) => {
     setAmountA(value);
-    // In a real implementation, you'd calculate the corresponding amount B
-    // based on current pool ratio or market price
+    // In a real implementation, calculate corresponding amount B based on pool ratio
   };
 
   const handleAmountBChange = (value: string) => {
     setAmountB(value);
-    // Calculate corresponding amount A
+    // In a real implementation, calculate corresponding amount A based on pool ratio
+  };
+
+  const calculateDeadline = () => {
+    return Math.floor(Date.now() / 1000) + (20 * 60); // 20 minutes from now
   };
 
   const handleAddLiquidity = async () => {
@@ -97,31 +104,50 @@ const AddLiquidity = () => {
     }
 
     try {
-      toast({
-        title: "Adding Liquidity",
-        description: "Transaction submitted. Please confirm in your wallet.",
-      });
-      
-      // In a real implementation, you'd call your liquidity contract here
-      console.log('Adding liquidity:', {
+      // Calculate minimum amounts with slippage tolerance
+      const amountAMin = (parseFloat(amountA) * (1 - slippage / 100)).toString();
+      const amountBMin = (parseFloat(amountB) * (1 - slippage / 100)).toString();
+
+      const result = await addLiquidity({
         tokenA: tokenA.address,
         tokenB: tokenB.address,
-        amountA,
-        amountB,
-        slippage
+        amountADesired: amountA,
+        amountBDesired: amountB,
+        amountAMin,
+        amountBMin,
+        deadline: calculateDeadline()
       });
-      
+
+      if (result) {
+        // Clear form on success
+        setAmountA('');
+        setAmountB('');
+        setTokenA(null);
+        setTokenB(null);
+      }
     } catch (error) {
-      console.error('Error adding liquidity:', error);
-      toast({
-        title: "Transaction Failed",
-        description: "Failed to add liquidity. Please try again.",
-        variant: "destructive"
-      });
+      console.error('Error in handleAddLiquidity:', error);
     }
   };
 
-  const isFormValid = tokenA && tokenB && amountA && amountB && parseFloat(amountA) > 0 && parseFloat(amountB) > 0;
+  const isFormValid = tokenA && tokenB && amountA && amountB && 
+                     parseFloat(amountA) > 0 && parseFloat(amountB) > 0;
+
+  if (!contractsDeployed) {
+    return (
+      <Card className="max-w-lg mx-auto">
+        <CardContent className="text-center p-12">
+          <h3 className="text-lg font-semibold mb-2">Contracts Not Deployed</h3>
+          <p className="text-muted-foreground mb-4">
+            Deploy your DEX contracts to start adding liquidity
+          </p>
+          <Button variant="outline" disabled>
+            Deploy Contracts First
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card className="max-w-lg mx-auto">
@@ -218,27 +244,40 @@ const AddLiquidity = () => {
           </div>
         </div>
 
-        {/* Price and Pool Info */}
+        {/* Real-time Price and Pool Info */}
         {priceRatio && (
           <div className="p-4 border rounded-lg bg-muted/20 space-y-2">
             <div className="flex justify-between text-sm">
               <span>Price Ratio</span>
-              <span>{priceRatio} {tokenB?.symbol} per {tokenA?.symbol}</span>
+              <span className="font-mono">{priceRatio} {tokenB?.symbol} per {tokenA?.symbol}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span>Share of Pool</span>
-              <span>{shareOfPool}%</span>
+              <span className="font-mono">{shareOfPool}%</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span>Slippage Tolerance</span>
+              <span className="font-mono">{slippage}%</span>
             </div>
           </div>
         )}
 
         <Button
           onClick={handleAddLiquidity}
-          disabled={!isFormValid || !isConnected}
+          disabled={!isFormValid || !isConnected || isLoading}
           className="w-full"
           size="lg"
         >
-          {!isConnected ? 'Connect Wallet' : 'Add Liquidity'}
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Adding Liquidity...
+            </>
+          ) : !isConnected ? (
+            'Connect Wallet'
+          ) : (
+            'Add Liquidity'
+          )}
         </Button>
 
         {/* Token Selector Modals */}

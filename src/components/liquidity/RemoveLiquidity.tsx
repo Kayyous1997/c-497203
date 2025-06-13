@@ -1,38 +1,54 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
-import { ArrowDown, Minus } from 'lucide-react';
+import { ArrowDown, Loader2 } from 'lucide-react';
 import { useAccount } from 'wagmi';
+import { useLiquidity } from '@/hooks/useLiquidity';
 import { useToast } from '@/hooks/use-toast';
 
 const RemoveLiquidity = () => {
   const { isConnected } = useAccount();
+  const { positions, removeLiquidity, isLoading, contractsDeployed, fetchPositions } = useLiquidity();
   const { toast } = useToast();
   
   const [removePercentage, setRemovePercentage] = useState([25]);
   const [selectedPair, setSelectedPair] = useState<any>(null);
 
-  // Mock data - in real implementation, fetch user's LP positions
-  const mockPairs = [
-    {
-      id: '1',
-      tokenA: { symbol: 'ETH', address: '0x...', logoURI: '🔷' },
-      tokenB: { symbol: 'USDC', address: '0x...', logoURI: '💵' },
-      lpBalance: '0.5',
-      tokenAAmount: '0.25',
-      tokenBAmount: '500.0',
-      poolShare: '0.05'
+  // Refresh positions when component mounts
+  useEffect(() => {
+    if (isConnected && contractsDeployed) {
+      fetchPositions();
     }
-  ];
+  }, [isConnected, contractsDeployed, fetchPositions]);
+
+  // Auto-select first position if available
+  useEffect(() => {
+    if (positions.length > 0 && !selectedPair) {
+      setSelectedPair(positions[0]);
+    }
+  }, [positions, selectedPair]);
+
+  const calculateDeadline = () => {
+    return Math.floor(Date.now() / 1000) + (20 * 60); // 20 minutes from now
+  };
 
   const handleRemoveLiquidity = async () => {
     if (!isConnected) {
       toast({
         title: "Wallet Not Connected",
         description: "Please connect your wallet to remove liquidity",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!contractsDeployed) {
+      toast({
+        title: "Contracts Not Deployed",
+        description: "Please deploy your DEX contracts first",
         variant: "destructive"
       });
       return;
@@ -48,23 +64,31 @@ const RemoveLiquidity = () => {
     }
 
     try {
-      toast({
-        title: "Removing Liquidity",
-        description: "Transaction submitted. Please confirm in your wallet.",
-      });
+      const percentage = removePercentage[0] / 100;
+      const liquidityToRemove = (parseFloat(selectedPair.lpBalance) * percentage).toString();
       
-      console.log('Removing liquidity:', {
-        pair: selectedPair,
-        percentage: removePercentage[0]
+      // Calculate minimum amounts with 0.5% slippage
+      const slippageTolerance = 0.005;
+      const outputAmounts = calculateOutputAmounts();
+      const amountAMin = (parseFloat(outputAmounts.tokenA) * (1 - slippageTolerance)).toString();
+      const amountBMin = (parseFloat(outputAmounts.tokenB) * (1 - slippageTolerance)).toString();
+
+      const result = await removeLiquidity({
+        tokenA: selectedPair.tokenA.address,
+        tokenB: selectedPair.tokenB.address,
+        liquidity: liquidityToRemove,
+        amountAMin,
+        amountBMin,
+        deadline: calculateDeadline()
       });
-      
+
+      if (result) {
+        // Reset form
+        setRemovePercentage([25]);
+        setSelectedPair(null);
+      }
     } catch (error) {
       console.error('Error removing liquidity:', error);
-      toast({
-        title: "Transaction Failed",
-        description: "Failed to remove liquidity. Please try again.",
-        variant: "destructive"
-      });
     }
   };
 
@@ -78,6 +102,22 @@ const RemoveLiquidity = () => {
     };
   };
 
+  if (!contractsDeployed) {
+    return (
+      <Card className="max-w-lg mx-auto">
+        <CardContent className="text-center p-12">
+          <h3 className="text-lg font-semibold mb-2">Contracts Not Deployed</h3>
+          <p className="text-muted-foreground mb-4">
+            Deploy your DEX contracts to manage liquidity
+          </p>
+          <Button variant="outline" disabled>
+            Deploy Contracts First
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   const outputAmounts = calculateOutputAmounts();
 
   return (
@@ -89,9 +129,9 @@ const RemoveLiquidity = () => {
         {/* Pair Selection */}
         <div className="space-y-2">
           <Label>Select Pair</Label>
-          {mockPairs.length > 0 ? (
+          {positions.length > 0 ? (
             <div className="space-y-2">
-              {mockPairs.map((pair) => (
+              {positions.map((pair) => (
                 <Button
                   key={pair.id}
                   variant={selectedPair?.id === pair.id ? "default" : "outline"}
@@ -105,9 +145,10 @@ const RemoveLiquidity = () => {
                     <span>{pair.tokenB.logoURI}</span>
                     <span>{pair.tokenB.symbol}</span>
                   </div>
-                  <span className="text-sm text-muted-foreground">
-                    {pair.lpBalance} LP
-                  </span>
+                  <div className="text-right text-sm">
+                    <div className="font-mono">{pair.lpBalance} LP</div>
+                    <div className="text-muted-foreground">{pair.poolShare}% share</div>
+                  </div>
                 </Button>
               ))}
             </div>
@@ -115,17 +156,25 @@ const RemoveLiquidity = () => {
             <div className="text-center p-8 text-muted-foreground">
               <p>No liquidity positions found</p>
               <p className="text-sm">Add liquidity first to see your positions here</p>
+              <Button
+                variant="outline"
+                onClick={fetchPositions}
+                className="mt-2"
+                size="sm"
+              >
+                Refresh Positions
+              </Button>
             </div>
           )}
         </div>
 
         {selectedPair && (
           <>
-            {/* Removal Percentage */}
+            {/* Removal Percentage with Real-time Updates */}
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <Label>Amount to Remove</Label>
-                <span className="text-lg font-semibold">{removePercentage[0]}%</span>
+                <span className="text-lg font-bold">{removePercentage[0]}%</span>
               </div>
               
               <Slider
@@ -141,7 +190,7 @@ const RemoveLiquidity = () => {
                 {[25, 50, 75, 100].map((percentage) => (
                   <Button
                     key={percentage}
-                    variant="outline"
+                    variant={removePercentage[0] === percentage ? "default" : "outline"}
                     size="sm"
                     onClick={() => setRemovePercentage([percentage])}
                   >
@@ -155,7 +204,7 @@ const RemoveLiquidity = () => {
               <ArrowDown className="h-5 w-5 text-muted-foreground" />
             </div>
 
-            {/* Output Preview */}
+            {/* Real-time Output Preview */}
             <div className="space-y-3">
               <Label>You will receive</Label>
               
@@ -165,7 +214,7 @@ const RemoveLiquidity = () => {
                     <span>{selectedPair.tokenA.logoURI}</span>
                     <span className="font-medium">{selectedPair.tokenA.symbol}</span>
                   </div>
-                  <span className="font-semibold">{outputAmounts.tokenA}</span>
+                  <span className="font-mono font-semibold">{outputAmounts.tokenA}</span>
                 </div>
                 
                 <div className="flex justify-between items-center">
@@ -173,19 +222,37 @@ const RemoveLiquidity = () => {
                     <span>{selectedPair.tokenB.logoURI}</span>
                     <span className="font-medium">{selectedPair.tokenB.symbol}</span>
                   </div>
-                  <span className="font-semibold">{outputAmounts.tokenB}</span>
+                  <span className="font-mono font-semibold">{outputAmounts.tokenB}</span>
+                </div>
+
+                <div className="pt-2 border-t text-sm text-muted-foreground">
+                  <div className="flex justify-between">
+                    <span>LP Tokens to burn</span>
+                    <span className="font-mono">
+                      {(parseFloat(selectedPair.lpBalance) * removePercentage[0] / 100).toFixed(6)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
 
             <Button
               onClick={handleRemoveLiquidity}
-              disabled={!isConnected}
+              disabled={!isConnected || isLoading}
               className="w-full"
               size="lg"
               variant="destructive"
             >
-              {!isConnected ? 'Connect Wallet' : 'Remove Liquidity'}
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Removing Liquidity...
+                </>
+              ) : !isConnected ? (
+                'Connect Wallet'
+              ) : (
+                'Remove Liquidity'
+              )}
             </Button>
           </>
         )}
