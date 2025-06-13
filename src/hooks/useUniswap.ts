@@ -1,6 +1,8 @@
+
 import { useState, useCallback, useEffect } from 'react';
 import { useAccount, useChainId, useWalletClient } from 'wagmi';
-import { dexService, SwapParams, SwapQuote, DexConfig } from '@/services/uniswapService';
+import { dexService } from '@/services/dexService';
+import { SwapParams, SwapQuote } from '@/services/dexService';
 import { useToast } from '@/hooks/use-toast';
 
 export const useDex = () => {
@@ -19,7 +21,7 @@ export const useDex = () => {
     const initializeService = async () => {
       if (chainId) {
         try {
-          await dexService.initialize(chainId);
+          await dexService.initialize(chainId, walletClient);
           setIsInitialized(true);
           setContractsDeployed(dexService.isContractsDeployed());
           console.log('DEX service initialized for chain:', chainId);
@@ -36,7 +38,7 @@ export const useDex = () => {
     };
 
     initializeService();
-  }, [chainId, toast]);
+  }, [chainId, walletClient, toast]);
 
   const getQuote = useCallback(async (params: Omit<SwapParams, 'recipient' | 'chainId'>) => {
     if (!isInitialized || !address || !chainId) {
@@ -137,27 +139,55 @@ export const useDex = () => {
     }
   }, [isInitialized, address, chainId, walletClient, contractsDeployed, toast]);
 
-  const updateContractAddresses = useCallback((routerAddress: string, factoryAddress: string) => {
-    dexService.updateContractAddresses(routerAddress, factoryAddress);
-    setContractsDeployed(true);
-    toast({
-      title: "Contracts Updated",
-      description: "DEX contract addresses have been updated successfully.",
-    });
+  const updateContractAddresses = useCallback(async (factory: string, router: string, pool?: string) => {
+    try {
+      await dexService.updateContractAddresses(factory, router, pool);
+      setContractsDeployed(true);
+      toast({
+        title: "Contracts Updated",
+        description: "DEX contract addresses have been updated successfully.",
+      });
+      return true;
+    } catch (error) {
+      console.error('Error updating contracts:', error);
+      toast({
+        title: "Update Failed",
+        description: "Failed to update contract addresses.",
+        variant: "destructive"
+      });
+      return false;
+    }
   }, [toast]);
 
-  const updateFeePercent = useCallback((feePercent: number) => {
-    dexService.updateFeePercent(feePercent);
-    toast({
-      title: "Fee Updated",
-      description: `DEX fee updated to ${feePercent}%`,
-    });
-  }, [toast]);
+  const createPool = useCallback(async (tokenA: string, tokenB: string, fee: number) => {
+    if (!contractsDeployed) {
+      toast({
+        title: "Contracts Not Deployed",
+        description: "Please deploy your contracts first.",
+        variant: "destructive"
+      });
+      return null;
+    }
 
-  const getTokenAddress = useCallback((symbol: string) => {
-    if (!chainId) return null;
-    return dexService.getTokenAddress(symbol, chainId);
-  }, [chainId]);
+    try {
+      const poolAddress = await dexService.createPool(tokenA, tokenB, fee);
+      if (poolAddress) {
+        toast({
+          title: "Pool Created",
+          description: `Pool created at ${poolAddress.slice(0, 10)}...`,
+        });
+      }
+      return poolAddress;
+    } catch (error) {
+      console.error('Error creating pool:', error);
+      toast({
+        title: "Pool Creation Failed",
+        description: "Failed to create pool. Please try again.",
+        variant: "destructive"
+      });
+      return null;
+    }
+  }, [contractsDeployed, toast]);
 
   return {
     isInitialized,
@@ -166,12 +196,11 @@ export const useDex = () => {
     contractsDeployed,
     getQuote,
     executeSwap,
-    getTokenAddress,
     updateContractAddresses,
-    updateFeePercent,
+    createPool,
     supportedChains: dexService.getSupportedChains(),
     currentChainId: chainId,
-    dexConfig: dexService.getDexConfig()
+    dexConfig: dexService.getContractAddresses()
   };
 };
 
