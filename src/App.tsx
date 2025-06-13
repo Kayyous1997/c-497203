@@ -7,6 +7,7 @@ import { Web3Provider } from "@/components/Web3Provider";
 import Header from "@/components/Header";
 import Index from "./pages/Index";
 import Liquidity from "./pages/Liquidity";
+import Pool from "./pages/Pool";
 
 const App = () => (
   <Web3Provider>
@@ -20,6 +21,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/liquidity" element={<Liquidity />} />
+              <Route path="/pool" element={<Pool />} />
             </Routes>
           </main>
         </div>
