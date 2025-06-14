@@ -11,7 +11,6 @@ import TokenSelectorModal from "./TokenSelectorModal";
 import { useDex } from "@/hooks/useUniswap";
 import { useToast } from "@/hooks/use-toast";
 import { priceFeedService } from "@/services/priceFeedService";
-import { dexScreenerService } from "@/services/dexScreenerService";
 
 interface Token {
   symbol: string;
@@ -28,9 +27,7 @@ const SwapInterface = () => {
     isInitialized, 
     isLoading: dexLoading, 
     quote, 
-    contractsDeployed,
     getQuote, 
-    executeSwap, 
     getTokenAddress,
     currentChainId 
   } = useDex();
@@ -60,6 +57,7 @@ const SwapInterface = () => {
   const [fromBalance, setFromBalance] = useState("0.00");
   const [toBalance, setToBalance] = useState("0.00");
   const [isLoadingPrices, setIsLoadingPrices] = useState(true);
+  const [isSwapping, setIsSwapping] = useState(false);
 
   // Load initial token data and prices
   useEffect(() => {
@@ -149,10 +147,17 @@ const SwapInterface = () => {
       }
 
       try {
-        // In a real implementation, you would fetch actual balances from the blockchain
-        // For now, we'll use placeholder values since we don't have contract integration yet
-        setFromBalance("0.00");
-        setToBalance("0.00");
+        // Mock balances for demo - in production this would fetch real balances
+        const mockBalances = {
+          ETH: "2.45",
+          USDC: "1,250.00",
+          USDT: "890.50",
+          DAI: "500.00",
+          WBTC: "0.15"
+        };
+        
+        setFromBalance(mockBalances[fromToken.symbol as keyof typeof mockBalances] || "0.00");
+        setToBalance(mockBalances[toToken.symbol as keyof typeof mockBalances] || "0.00");
       } catch (error) {
         console.error('Error fetching balances:', error);
         setFromBalance("0.00");
@@ -161,36 +166,24 @@ const SwapInterface = () => {
     };
 
     updateBalances();
-  }, [isConnected, address, fromToken.address, toToken.address]);
+  }, [isConnected, address, fromToken.address, toToken.address, fromToken.symbol, toToken.symbol]);
 
-  // Get real quote when amount or tokens change
+  // Get quote when amount or tokens change
   useEffect(() => {
     const getDexQuote = async () => {
-      if (!fromAmount || !isInitialized || !fromToken.address || !toToken.address || fromToken.address === "0x..." || toToken.address === "0x...") {
+      if (!fromAmount || !fromToken.price || !toToken.price) {
         setToAmount("");
         return;
       }
 
       setIsGettingQuote(true);
       try {
-        const result = await getQuote({
-          tokenIn: fromToken.address,
-          tokenOut: toToken.address,
-          amountIn: fromAmount,
-          slippageTolerance: parseFloat(isCustomSlippage ? customSlippage : slippageTolerance)
-        });
-
-        if (result) {
-          setToAmount(result.amountOut);
-        } else {
-          // Fallback to price-based calculation when DEX quote is not available
-          if (fromToken.price > 0 && toToken.price > 0) {
-            const calculatedAmount = (Number(fromAmount) * fromToken.price) / toToken.price;
-            setToAmount(calculatedAmount.toFixed(6));
-          } else {
-            setToAmount("");
-          }
-        }
+        // Use price-based calculation for mock swaps
+        const calculatedAmount = (Number(fromAmount) * fromToken.price) / toToken.price;
+        // Add small random variation to simulate market conditions
+        const variation = 0.995 + (Math.random() * 0.01); // 0.5% variation
+        const finalAmount = calculatedAmount * variation;
+        setToAmount(finalAmount.toFixed(6));
       } catch (error) {
         console.error('Quote error:', error);
         setToAmount("");
@@ -201,13 +194,9 @@ const SwapInterface = () => {
 
     const timeoutId = setTimeout(getDexQuote, 500); // Debounce
     return () => clearTimeout(timeoutId);
-  }, [fromAmount, fromToken.address, toToken.address, fromToken.price, toToken.price, slippageTolerance, customSlippage, isCustomSlippage, getQuote, isInitialized]);
+  }, [fromAmount, fromToken.price, toToken.price]);
 
   const calculatePriceImpact = (fromAmount: string, fromToken: Token, toToken: Token) => {
-    if (quote?.priceImpact) {
-      return quote.priceImpact;
-    }
-    // Fallback calculation based on trade size
     if (!fromAmount || isNaN(Number(fromAmount))) return 0;
     const tradeSize = Number(fromAmount) * fromToken.price;
     if (tradeSize < 1000) return 0.1;
@@ -304,24 +293,6 @@ const SwapInterface = () => {
       return;
     }
 
-    if (!isInitialized) {
-      toast({
-        title: "Network Not Supported",
-        description: "DEX is not available on this network",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!contractsDeployed) {
-      toast({
-        title: "Contracts Not Deployed",
-        description: "Deploy your DEX contracts first to enable swapping",
-        variant: "destructive"
-      });
-      return;
-    }
-
     if (!fromAmount || !toAmount) {
       toast({
         title: "Invalid Amount",
@@ -331,35 +302,43 @@ const SwapInterface = () => {
       return;
     }
 
-    console.log(`Swapping ${fromAmount} ${fromToken.symbol} for ${toAmount} ${toToken.symbol}`);
+    setIsSwapping(true);
     
-    const txHash = await executeSwap({
-      tokenIn: fromToken.address,
-      tokenOut: toToken.address,
-      amountIn: fromAmount,
-      slippageTolerance: parseFloat(currentSlippage)
-    });
+    try {
+      // Simulate swap transaction
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      toast({
+        title: "Swap Successful!",
+        description: `Successfully swapped ${fromAmount} ${fromToken.symbol} for ${toAmount} ${toToken.symbol}`,
+      });
 
-    if (txHash) {
       // Reset form on successful swap
       setFromAmount("");
       setToAmount("");
+    } catch (error) {
+      console.error('Swap error:', error);
+      toast({
+        title: "Swap Failed",
+        description: "The swap transaction failed. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSwapping(false);
     }
   };
 
   const getSwapButtonText = () => {
     if (!isConnected) return "Connect Wallet";
-    if (!isInitialized) return "Network Not Supported";
-    if (!contractsDeployed) return "Deploy Contracts First";
     if (!fromAmount) return "Enter Amount";
-    if (isGettingQuote || dexLoading || isLoadingPrices) return "Loading...";
+    if (isGettingQuote || dexLoading || isLoadingPrices || isSwapping) return "Loading...";
     if (!toAmount) return "Invalid Pair";
     if (priceImpact > 3) return "Swap Anyway";
     return "Swap";
   };
 
   const isSwapDisabled = () => {
-    return !isConnected || !isInitialized || !contractsDeployed || !fromAmount || !toAmount || isGettingQuote || dexLoading || isLoadingPrices;
+    return !isConnected || !fromAmount || !toAmount || isGettingQuote || dexLoading || isLoadingPrices || isSwapping;
   };
 
   return (
@@ -414,20 +393,6 @@ const SwapInterface = () => {
           </Popover>
         </div>
 
-        {!contractsDeployed && isConnected && isInitialized && (
-          <div className="mb-4 p-3 bg-blue-500/10 rounded-lg flex items-center gap-2 text-blue-600">
-            <Info className="h-4 w-4" />
-            <span className="text-sm">Your DEX contracts are not deployed yet. You can test with price-based quotes.</span>
-          </div>
-        )}
-
-        {!isInitialized && isConnected && (
-          <div className="mb-4 p-3 bg-yellow-500/10 rounded-lg flex items-center gap-2 text-yellow-600">
-            <AlertTriangle className="h-4 w-4" />
-            <span className="text-sm">DEX is not available on this network</span>
-          </div>
-        )}
-
         <div className="space-y-4">
           {/* From Token */}
           <Card className="bg-secondary/20 border-muted/20">
@@ -445,7 +410,7 @@ const SwapInterface = () => {
                   value={fromAmount}
                   onChange={(e) => handleFromAmountChange(e.target.value)}
                   className="text-lg font-semibold bg-transparent border-none p-0 h-auto"
-                  disabled={!isConnected || !isInitialized || isLoadingPrices}
+                  disabled={!isConnected || isLoadingPrices}
                 />
                 <Button
                   variant="ghost"
@@ -473,7 +438,7 @@ const SwapInterface = () => {
               size="icon"
               onClick={handleSwapTokens}
               className="rounded-full bg-muted/20 hover:bg-muted/30"
-              disabled={!isConnected || !isInitialized || isLoadingPrices}
+              disabled={!isConnected || isLoadingPrices}
             >
               <ArrowDown className="h-4 w-4" />
             </Button>
@@ -515,14 +480,14 @@ const SwapInterface = () => {
               {toAmount && toToken.price > 0 && (
                 <div className="text-sm text-muted-foreground mt-1">
                   ≈ ${(Number(toAmount) * toToken.price).toLocaleString()}
-                  {!contractsDeployed && <span className="ml-2 text-blue-500">(Price-based)</span>}
+                  <span className="ml-2 text-blue-500">(Demo Mode)</span>
                 </div>
               )}
             </CardContent>
           </Card>
 
           {/* Swap Details */}
-          {fromAmount && toAmount && isConnected && isInitialized && !isLoadingPrices && (
+          {fromAmount && toAmount && isConnected && !isLoadingPrices && (
             <div className="bg-muted/10 rounded-lg p-3 space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Rate</span>
@@ -531,7 +496,7 @@ const SwapInterface = () => {
               
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Network Fee</span>
-                <span>{quote?.gasEstimate ? `~$${(parseInt(quote.gasEstimate) * 0.000000001 * 2000).toFixed(2)}` : "~$2.50"}</span>
+                <span>~$2.50</span>
               </div>
               
               <div className="flex justify-between">
@@ -581,7 +546,7 @@ const SwapInterface = () => {
             disabled={isSwapDisabled()}
             variant={priceImpact > 3 ? "destructive" : "default"}
           >
-            {(dexLoading || isLoadingPrices) && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            {(dexLoading || isLoadingPrices || isSwapping) && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
             {getSwapButtonText()}
           </Button>
         </div>
