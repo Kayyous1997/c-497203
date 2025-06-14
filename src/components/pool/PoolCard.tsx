@@ -3,6 +3,7 @@ import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { TrendingUp, TrendingDown, Plus, ExternalLink } from 'lucide-react';
 
 interface PoolCardProps {
@@ -27,6 +28,10 @@ interface PoolCardProps {
 }
 
 const PoolCard = ({ pool, onViewDetails }: PoolCardProps) => {
+  const getTokenFallback = (symbol: string) => {
+    return symbol.slice(0, 2).toUpperCase();
+  };
+
   return (
     <Card className="hover:shadow-md transition-shadow cursor-pointer" onClick={onViewDetails}>
       <CardContent className="p-6">
@@ -34,12 +39,26 @@ const PoolCard = ({ pool, onViewDetails }: PoolCardProps) => {
           {/* Token Pair */}
           <div className="flex items-center space-x-4">
             <div className="flex -space-x-2">
-              <div className="w-10 h-10 rounded-full bg-white border-2 border-background flex items-center justify-center text-lg z-10">
-                {pool.tokenA.logoUrl}
-              </div>
-              <div className="w-10 h-10 rounded-full bg-white border-2 border-background flex items-center justify-center text-lg">
-                {pool.tokenB.logoUrl}
-              </div>
+              <Avatar className="w-10 h-10 border-2 border-background z-10">
+                <AvatarImage 
+                  src={pool.tokenA.logoUrl} 
+                  alt={pool.tokenA.symbol}
+                  className="rounded-full"
+                />
+                <AvatarFallback className="text-xs">
+                  {getTokenFallback(pool.tokenA.symbol)}
+                </AvatarFallback>
+              </Avatar>
+              <Avatar className="w-10 h-10 border-2 border-background">
+                <AvatarImage 
+                  src={pool.tokenB.logoUrl} 
+                  alt={pool.tokenB.symbol}
+                  className="rounded-full"
+                />
+                <AvatarFallback className="text-xs">
+                  {getTokenFallback(pool.tokenB.symbol)}
+                </AvatarFallback>
+              </Avatar>
             </div>
             <div>
               <h3 className="font-semibold text-lg">
