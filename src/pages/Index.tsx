@@ -1,11 +1,9 @@
-
 import MarketStats from "@/components/MarketStats";
 import SwapInterface from "@/components/SwapInterface";
 import CryptoList from "@/components/CryptoList";
 import PortfolioDashboard from "@/components/PortfolioDashboard";
 import TradingChart from "@/components/TradingChart";
 import TransactionHistory from "@/components/TransactionHistory";
-import CryptoChart from "@/components/CryptoChart";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const Index = () => {
@@ -28,8 +26,6 @@ const Index = () => {
 
           <TabsContent value="overview" className="space-y-6">
             <MarketStats />
-            
-            <CryptoChart />
             
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2">
