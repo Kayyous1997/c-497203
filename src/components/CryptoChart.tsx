@@ -37,18 +37,46 @@ const CryptoChart = () => {
     searchToken('bitcoin');
   }, [searchToken]);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      searchToken(searchQuery.trim());
+    const query = searchQuery.trim();
+    
+    if (!query) {
+      setShowPairsList(false);
+      return;
+    }
+
+    console.log('Searching for:', query);
+    
+    try {
+      await searchToken(query);
       setShowPairsList(true);
+    } catch (error) {
+      console.error('Search error:', error);
+    }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    
+    // Auto-search as user types (debounced)
+    if (value.length >= 2) {
+      const timeoutId = setTimeout(() => {
+        searchToken(value.trim());
+        setShowPairsList(true);
+      }, 500);
+      
+      return () => clearTimeout(timeoutId);
+    } else if (value.length === 0) {
+      setShowPairsList(false);
     }
   };
 
   const handlePairSelect = (pair: DexScreenerPair) => {
     selectPair(pair);
     setShowPairsList(false);
-    setSearchQuery('');
+    setSearchQuery(pair.baseToken.symbol);
   };
 
   const getPriceChangeColor = (change: number) => {
@@ -74,11 +102,12 @@ const CryptoChart = () => {
                 type="text"
                 placeholder="Search token or paste address..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={handleInputChange}
                 className="pl-10 w-64"
+                disabled={isLoading}
               />
             </div>
-            <Button type="submit" size="sm" disabled={isLoading}>
+            <Button type="submit" size="sm" disabled={isLoading || !searchQuery.trim()}>
               {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Search'}
             </Button>
           </form>
@@ -104,17 +133,27 @@ const CryptoChart = () => {
 
       {/* Pairs Selection */}
       {showPairsList && pairs.length > 0 && (
-        <Card className="mb-6">
+        <Card className="mb-6 border-muted/20 bg-card/80 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle className="text-lg">Select Trading Pair</CardTitle>
+            <CardTitle className="text-lg flex items-center justify-between">
+              Search Results
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowPairsList(false)}
+                className="h-6 w-6 p-0"
+              >
+                ×
+              </Button>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid gap-2 max-h-60 overflow-y-auto">
-              {pairs.slice(0, 10).map((pair) => (
+              {pairs.slice(0, 10).map((pair, index) => (
                 <Button
-                  key={pair.pairAddress}
+                  key={`${pair.pairAddress}-${index}`}
                   variant="ghost"
-                  className="justify-start h-auto p-3"
+                  className="justify-start h-auto p-3 hover:bg-muted/10"
                   onClick={() => handlePairSelect(pair)}
                 >
                   <div className="flex items-center justify-between w-full">
@@ -139,6 +178,19 @@ const CryptoChart = () => {
                   </div>
                 </Button>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* No results message */}
+      {showPairsList && pairs.length === 0 && !isLoading && searchQuery && (
+        <Card className="mb-6 border-muted/20 bg-card/80 backdrop-blur-sm">
+          <CardContent className="p-6 text-center">
+            <div className="text-muted-foreground">
+              <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
+              <p>No tokens found for "{searchQuery}"</p>
+              <p className="text-sm mt-1">Try searching for a different token symbol or contract address</p>
             </div>
           </CardContent>
         </Card>
@@ -259,7 +311,7 @@ const CryptoChart = () => {
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </div>
 
           {/* DEX Screener Embedded Chart */}
           <div className="h-[500px] w-full">
@@ -284,7 +336,7 @@ const CryptoChart = () => {
       )}
 
       {/* Empty State */}
-      {!selectedPair && !isLoading && pairs.length === 0 && !error && (
+      {!selectedPair && !isLoading && pairs.length === 0 && !error && !showPairsList && (
         <div className="h-[400px] flex items-center justify-center">
           <div className="text-center">
             <Search className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
