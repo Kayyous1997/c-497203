@@ -1,7 +1,7 @@
 
 interface TokenLogo {
   url: string;
-  source: 'uniswap' | 'pancakeswap' | 'dexscreener' | 'fallback';
+  source: 'coingecko' | 'trustwallet' | 'uniswap' | 'pancakeswap' | 'dexscreener' | 'fallback';
 }
 
 class TokenLogoService {
@@ -14,8 +14,10 @@ class TokenLogoService {
       return this.logoCache.get(cacheKey)!;
     }
 
-    // Try multiple sources
+    // Try multiple sources in order of preference
     const sources = [
+      () => this.getCoinGeckoLogo(symbol || '', address),
+      () => this.getTrustWalletLogo(address, chainId),
       () => this.getUniswapLogo(address, chainId),
       () => this.getPancakeSwapLogo(address, chainId),
       () => this.getDexScreenerLogo(address, chainId),
@@ -44,36 +46,99 @@ class TokenLogoService {
     return fallback;
   }
 
-  private async getUniswapLogo(address: string, chainId: number): Promise<TokenLogo | null> {
-    // Uniswap token list URLs by chain
-    const uniswapUrls: Record<number, string> = {
-      1: 'https://tokens.uniswap.org/assets/images/tokens/',
-      8453: 'https://tokens.uniswap.org/assets/images/tokens/', // Base uses same format
-    };
+  private async getCoinGeckoLogo(symbol: string, address: string): Promise<TokenLogo | null> {
+    try {
+      // First try to get by symbol
+      const coinId = this.getCoinGeckoId(symbol);
+      if (coinId) {
+        const response = await fetch(`https://api.coingecko.com/api/v3/coins/${coinId}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.image?.large) {
+            return { url: data.image.large, source: 'coingecko' };
+          }
+        }
+      }
 
-    const baseUrl = uniswapUrls[chainId];
-    if (!baseUrl) return null;
+      // Try searching by contract address
+      if (address) {
+        const response = await fetch(`https://api.coingecko.com/api/v3/coins/ethereum/contract/${address}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (data.image?.large) {
+            return { url: data.image.large, source: 'coingecko' };
+          }
+        }
+      }
 
-    const logoUrl = `${baseUrl}${address.toLowerCase()}.png`;
-    
-    if (await this.isImageValid(logoUrl)) {
-      return { url: logoUrl, source: 'uniswap' };
+      return null;
+    } catch (error) {
+      return null;
     }
-    
-    return null;
+  }
+
+  private async getTrustWalletLogo(address: string, chainId: number): Promise<TokenLogo | null> {
+    try {
+      const chainMap: Record<number, string> = {
+        1: 'ethereum',
+        56: 'smartchain',
+        137: 'polygon',
+        8453: 'base'
+      };
+
+      const chain = chainMap[chainId];
+      if (!chain) return null;
+
+      const logoUrl = `https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/${chain}/assets/${address}/logo.png`;
+      
+      if (await this.isImageValid(logoUrl)) {
+        return { url: logoUrl, source: 'trustwallet' };
+      }
+      
+      return null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  private async getUniswapLogo(address: string, chainId: number): Promise<TokenLogo | null> {
+    try {
+      // Uniswap token list URLs by chain
+      const uniswapUrls: Record<number, string> = {
+        1: 'https://tokens.uniswap.org/assets/images/tokens/',
+        8453: 'https://tokens.uniswap.org/assets/images/tokens/', // Base uses same format
+      };
+
+      const baseUrl = uniswapUrls[chainId];
+      if (!baseUrl) return null;
+
+      const logoUrl = `${baseUrl}${address.toLowerCase()}.png`;
+      
+      if (await this.isImageValid(logoUrl)) {
+        return { url: logoUrl, source: 'uniswap' };
+      }
+      
+      return null;
+    } catch (error) {
+      return null;
+    }
   }
 
   private async getPancakeSwapLogo(address: string, chainId: number): Promise<TokenLogo | null> {
-    // PancakeSwap supports BSC and other chains
-    if (chainId !== 56 && chainId !== 1) return null; // BSC mainnet or Ethereum
-    
-    const logoUrl = `https://tokens.pancakeswap.finance/images/${address.toLowerCase()}.png`;
-    
-    if (await this.isImageValid(logoUrl)) {
-      return { url: logoUrl, source: 'pancakeswap' };
+    try {
+      // PancakeSwap supports BSC and other chains
+      if (chainId !== 56 && chainId !== 1) return null; // BSC mainnet or Ethereum
+      
+      const logoUrl = `https://tokens.pancakeswap.finance/images/${address.toLowerCase()}.png`;
+      
+      if (await this.isImageValid(logoUrl)) {
+        return { url: logoUrl, source: 'pancakeswap' };
+      }
+      
+      return null;
+    } catch (error) {
+      return null;
     }
-    
-    return null;
   }
 
   private async getDexScreenerLogo(address: string, chainId: number): Promise<TokenLogo | null> {
@@ -100,6 +165,47 @@ class TokenLogoService {
       url: this.getEmojiForSymbol(symbol),
       source: 'fallback'
     };
+  }
+
+  private getCoinGeckoId(symbol: string): string | null {
+    const coinMap: Record<string, string> = {
+      'BTC': 'bitcoin',
+      'ETH': 'ethereum',
+      'USDC': 'usd-coin',
+      'USDT': 'tether',
+      'DAI': 'dai',
+      'LINK': 'chainlink',
+      'UNI': 'uniswap',
+      'AAVE': 'aave',
+      'COMP': 'compound-governance-token',
+      'MKR': 'maker',
+      'SNX': 'havven',
+      'CRV': 'curve-dao-token',
+      'YFI': 'yearn-finance',
+      'SUSHI': 'sushi',
+      'MATIC': 'matic-network',
+      'ADA': 'cardano',
+      'DOT': 'polkadot',
+      'SOL': 'solana',
+      'AVAX': 'avalanche-2',
+      'ALGO': 'algorand',
+      'ATOM': 'cosmos',
+      'VET': 'vechain',
+      'FIL': 'filecoin',
+      'TRX': 'tron',
+      'ETC': 'ethereum-classic',
+      'XLM': 'stellar',
+      'XMR': 'monero',
+      'EOS': 'eos',
+      'IOTA': 'iota',
+      'XTZ': 'tezos',
+      'NEO': 'neo',
+      'DASH': 'dash',
+      'ZEC': 'zcash',
+      'DCR': 'decred'
+    };
+    
+    return coinMap[symbol.toUpperCase()] || null;
   }
 
   private getEmojiForSymbol(symbol: string): string {
