@@ -1,4 +1,6 @@
 
+import { dexScreenerService } from './dexScreenerService';
+
 interface PortfolioToken {
   symbol: string;
   address: string;
@@ -29,141 +31,130 @@ interface PortfolioSummary {
 }
 
 class PortfolioService {
-  private mockPositions: PortfolioPosition[] = [
-    {
-      id: '1',
-      type: 'spot',
-      tokens: [
-        {
-          symbol: 'ETH',
-          address: '0x...',
-          balance: 2.5,
-          value: 6500,
-          price: 2600,
-          priceChange24h: 3.2,
-          allocation: 65
-        }
-      ],
-      currentValue: 6500,
-      pnl: 350,
-      pnlPercentage: 5.7,
-      createdAt: Date.now() - 86400000 * 30 // 30 days ago
-    },
-    {
-      id: '2',
-      type: 'spot',
-      tokens: [
-        {
-          symbol: 'USDC',
-          address: '0x...',
-          balance: 2000,
-          value: 2000,
-          price: 1,
-          priceChange24h: 0.1,
-          allocation: 20
-        }
-      ],
-      currentValue: 2000,
-      pnl: 0,
-      pnlPercentage: 0,
-      createdAt: Date.now() - 86400000 * 15 // 15 days ago
-    },
-    {
-      id: '3',
-      type: 'liquidity',
-      tokens: [
-        {
-          symbol: 'ETH',
-          address: '0x...',
-          balance: 0.5,
-          value: 650,
-          price: 2600,
-          priceChange24h: 3.2,
-          allocation: 8.125
-        },
-        {
-          symbol: 'USDC',
-          address: '0x...',
-          balance: 650,
-          value: 650,
-          price: 1,
-          priceChange24h: 0.1,
-          allocation: 6.875
-        }
-      ],
-      currentValue: 1300,
-      pnl: 45,
-      pnlPercentage: 3.6,
-      createdAt: Date.now() - 86400000 * 7 // 7 days ago
-    }
-  ];
+  private cache = new Map<string, { data: PortfolioSummary; timestamp: number }>();
+  private readonly CACHE_DURATION = 30000; // 30 seconds
 
   async getPortfolioSummary(userAddress?: string): Promise<PortfolioSummary> {
-    // In a real implementation, this would fetch from blockchain
-    // For now, return mock data
-    
-    const totalValue = this.mockPositions.reduce((sum, pos) => sum + pos.currentValue, 0);
-    const totalPnl = this.mockPositions.reduce((sum, pos) => sum + pos.pnl, 0);
-    const totalPnlPercentage = (totalPnl / (totalValue - totalPnl)) * 100;
+    if (!userAddress) {
+      return {
+        totalValue: 0,
+        totalPnl: 0,
+        totalPnlPercentage: 0,
+        positions: [],
+        topTokens: []
+      };
+    }
 
-    // Aggregate tokens for top holdings
-    const tokenMap = new Map<string, PortfolioToken>();
+    // Check cache first
+    const cached = this.cache.get(userAddress);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
+      return cached.data;
+    }
+
+    try {
+      // Fetch token balances from blockchain (simplified - in real implementation would use ethers/web3)
+      const positions = await this.fetchUserPositions(userAddress);
+      const tokens = await this.fetchTokenPrices(positions);
+      
+      const totalValue = tokens.reduce((sum, token) => sum + token.value, 0);
+      
+      // Calculate PnL (simplified - would need transaction history for accurate calculation)
+      const totalPnl = totalValue * 0.05; // Mock 5% gain for demo
+      const totalPnlPercentage = (totalPnl / (totalValue - totalPnl)) * 100;
+
+      const portfolio: PortfolioSummary = {
+        totalValue,
+        totalPnl,
+        totalPnlPercentage,
+        positions,
+        topTokens: tokens.slice(0, 10)
+      };
+
+      // Cache the result
+      this.cache.set(userAddress, { data: portfolio, timestamp: Date.now() });
+      
+      return portfolio;
+    } catch (error) {
+      console.error('Error fetching portfolio:', error);
+      return {
+        totalValue: 0,
+        totalPnl: 0,
+        totalPnlPercentage: 0,
+        positions: [],
+        topTokens: []
+      };
+    }
+  }
+
+  private async fetchUserPositions(userAddress: string): Promise<PortfolioPosition[]> {
+    // In a real implementation, this would:
+    // 1. Query the blockchain for all token balances
+    // 2. Query DEX contracts for liquidity positions
+    // 3. Parse transaction history for entry prices
     
-    this.mockPositions.forEach(position => {
-      position.tokens.forEach(token => {
-        const existing = tokenMap.get(token.symbol);
-        if (existing) {
-          existing.balance += token.balance;
-          existing.value += token.value;
-          existing.allocation = (existing.value / totalValue) * 100;
-        } else {
-          tokenMap.set(token.symbol, { ...token });
+    // For now, return empty array - will be populated when real blockchain integration is added
+    return [];
+  }
+
+  private async fetchTokenPrices(positions: PortfolioPosition[]): Promise<PortfolioToken[]> {
+    const tokens: PortfolioToken[] = [];
+    
+    try {
+      // Get popular tokens to show as examples when user has no positions
+      const popularTokens = await dexScreenerService.getPopularTokens();
+      
+      // Convert to portfolio tokens format
+      for (const token of popularTokens.slice(0, 5)) {
+        if (token.baseToken && token.priceUsd) {
+          tokens.push({
+            symbol: token.baseToken.symbol,
+            address: token.baseToken.address,
+            balance: 0, // Would be fetched from blockchain
+            value: 0,
+            price: parseFloat(token.priceUsd),
+            priceChange24h: token.priceChange?.h24 || 0,
+            allocation: 0
+          });
         }
-      });
-    });
+      }
+    } catch (error) {
+      console.error('Error fetching token prices:', error);
+    }
 
-    const topTokens = Array.from(tokenMap.values())
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10);
-
-    return {
-      totalValue,
-      totalPnl,
-      totalPnlPercentage,
-      positions: this.mockPositions,
-      topTokens
-    };
+    return tokens;
   }
 
   async getPositionHistory(positionId: string): Promise<{ timestamp: number; value: number }[]> {
-    // Mock historical data for a position
-    const position = this.mockPositions.find(p => p.id === positionId);
-    if (!position) return [];
-
-    const history = [];
-    const daysBack = 30;
-    const currentValue = position.currentValue;
-    const startValue = currentValue - position.pnl;
-
-    for (let i = daysBack; i >= 0; i--) {
-      const timestamp = Date.now() - (i * 86400000);
-      const progress = (daysBack - i) / daysBack;
-      const value = startValue + (position.pnl * progress) + (Math.random() - 0.5) * 100;
-      
-      history.push({ timestamp, value });
-    }
-
-    return history;
+    // In a real implementation, this would fetch historical data from:
+    // 1. Blockchain events
+    // 2. DEX Screener historical API
+    // 3. Transaction history
+    
+    return [];
   }
 
   async updatePortfolio(userAddress: string): Promise<void> {
-    // In a real implementation, this would:
-    // 1. Fetch all token balances for the user
-    // 2. Get current prices for all tokens
-    // 3. Calculate PnL based on transaction history
-    // 4. Update the portfolio data
+    // Clear cache to force refresh
+    this.cache.delete(userAddress);
+    
+    // Fetch fresh data
+    await this.getPortfolioSummary(userAddress);
     
     console.log('Portfolio updated for:', userAddress);
+  }
+
+  // Real-time updates
+  startRealTimeUpdates(userAddress: string, callback: (portfolio: PortfolioSummary) => void): () => void {
+    const interval = setInterval(async () => {
+      try {
+        const portfolio = await this.getPortfolioSummary(userAddress);
+        callback(portfolio);
+      } catch (error) {
+        console.error('Error in real-time update:', error);
+      }
+    }, 30000); // Update every 30 seconds
+
+    return () => clearInterval(interval);
   }
 }
 
