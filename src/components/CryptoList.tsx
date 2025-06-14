@@ -1,3 +1,4 @@
+
 import { ArrowUpIcon, ArrowDownIcon, TrendingUpIcon, Star, ExternalLink, Zap, AlertTriangle } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -86,32 +87,34 @@ const CryptoList = () => {
       return false;
     }
 
-    // Category filters
+    // Category filters - add null checks for price changes
     switch (activeFilter) {
       case 'gainers':
-        return crypto.price_change_percentage_24h > 5;
+        return (crypto.price_change_percentage_24h || 0) > 5;
       case 'losers':
-        return crypto.price_change_percentage_24h < -5;
+        return (crypto.price_change_percentage_24h || 0) < -5;
       case 'volume':
-        return crypto.total_volume > 1000000000; // 1B+ volume
+        return (crypto.total_volume || 0) > 1000000000; // 1B+ volume
       default:
         return true;
     }
   });
 
   const sortedCryptos = filteredCryptos?.sort((a, b) => {
-    const aValue = a[sortBy];
-    const bValue = b[sortBy];
+    const aValue = a[sortBy] || 0;
+    const bValue = b[sortBy] || 0;
     return sortOrder === 'asc' ? aValue - bValue : bValue - aValue;
   });
 
   const formatPrice = (price: number) => {
+    if (!price) return '$0.00';
     if (price < 0.01) return `$${price.toFixed(6)}`;
     if (price < 1) return `$${price.toFixed(4)}`;
     return `$${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
   const formatMarketCap = (marketCap: number) => {
+    if (!marketCap) return '$0';
     if (marketCap >= 1e12) return `$${(marketCap / 1e12).toFixed(2)}T`;
     if (marketCap >= 1e9) return `$${(marketCap / 1e9).toFixed(2)}B`;
     if (marketCap >= 1e6) return `$${(marketCap / 1e6).toFixed(2)}M`;
@@ -119,24 +122,28 @@ const CryptoList = () => {
   };
 
   const formatVolume = (volume: number) => {
+    if (!volume) return '$0';
     if (volume >= 1e9) return `$${(volume / 1e9).toFixed(2)}B`;
     if (volume >= 1e6) return `$${(volume / 1e6).toFixed(2)}M`;
     return `$${volume.toLocaleString()}`;
   };
 
-  const getPriceChangeColor = (change: number) => {
+  const getPriceChangeColor = (change: number | null) => {
+    if (!change) return 'text-muted-foreground';
     if (change > 0) return 'text-green-500';
     if (change < 0) return 'text-red-500';
     return 'text-muted-foreground';
   };
 
   const getRankBadgeVariant = (rank: number) => {
+    if (!rank) return 'outline';
     if (rank <= 3) return 'default';
     if (rank <= 10) return 'secondary';
     return 'outline';
   };
 
-  const getPerformanceBadge = (change24h: number) => {
+  const getPerformanceBadge = (change24h: number | null) => {
+    if (!change24h) return null;
     if (change24h > 10) return { variant: 'default' as const, text: 'Hot', icon: Zap };
     if (change24h < -10) return { variant: 'destructive' as const, text: 'Risk', icon: AlertTriangle };
     return null;
@@ -279,7 +286,7 @@ const CryptoList = () => {
                 >
                   <TableCell>
                     <Badge variant={getRankBadgeVariant(crypto.market_cap_rank)}>
-                      {crypto.market_cap_rank}
+                      {crypto.market_cap_rank || 'N/A'}
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -315,12 +322,12 @@ const CryptoList = () => {
                   </TableCell>
                   <TableCell>
                     <CryptoMiniChart 
-                      priceChange24h={crypto.price_change_percentage_24h}
+                      priceChange24h={crypto.price_change_percentage_24h || 0}
                       sparklineData={crypto.sparkline_in_7d?.price?.slice(-7)}
                     />
                   </TableCell>
                   <TableCell>
-                    <span className={`flex items-center gap-1 text-sm ${getPriceChangeColor(crypto.price_change_percentage_1h_in_currency || 0)}`}>
+                    <span className={`flex items-center gap-1 text-sm ${getPriceChangeColor(crypto.price_change_percentage_1h_in_currency)}`}>
                       {(crypto.price_change_percentage_1h_in_currency || 0) >= 0 ? (
                         <ArrowUpIcon className="w-3 h-3" />
                       ) : (
@@ -331,16 +338,16 @@ const CryptoList = () => {
                   </TableCell>
                   <TableCell>
                     <span className={`flex items-center gap-1 font-medium ${getPriceChangeColor(crypto.price_change_percentage_24h)}`}>
-                      {crypto.price_change_percentage_24h >= 0 ? (
+                      {(crypto.price_change_percentage_24h || 0) >= 0 ? (
                         <ArrowUpIcon className="w-3 h-3" />
                       ) : (
                         <ArrowDownIcon className="w-3 h-3" />
                       )}
-                      {Math.abs(crypto.price_change_percentage_24h).toFixed(2)}%
+                      {Math.abs(crypto.price_change_percentage_24h || 0).toFixed(2)}%
                     </span>
                   </TableCell>
                   <TableCell>
-                    <span className={`flex items-center gap-1 text-sm ${getPriceChangeColor(crypto.price_change_percentage_7d_in_currency || 0)}`}>
+                    <span className={`flex items-center gap-1 text-sm ${getPriceChangeColor(crypto.price_change_percentage_7d_in_currency)}`}>
                       {(crypto.price_change_percentage_7d_in_currency || 0) >= 0 ? (
                         <ArrowUpIcon className="w-3 h-3" />
                       ) : (
