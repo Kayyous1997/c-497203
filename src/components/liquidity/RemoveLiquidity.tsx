@@ -4,14 +4,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
-import { ArrowDown, Loader2 } from 'lucide-react';
+import { ArrowDown, Loader2, AlertTriangle } from 'lucide-react';
 import { useAccount } from 'wagmi';
 import { useLiquidity } from '@/hooks/useLiquidity';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const RemoveLiquidity = () => {
   const { isConnected } = useAccount();
-  const { positions, removeLiquidity, isLoading, contractsDeployed, fetchPositions } = useLiquidity();
+  const { positions, removeLiquidity, isLoading, fetchPositions } = useLiquidity();
   const { toast } = useToast();
   
   const [removePercentage, setRemovePercentage] = useState([25]);
@@ -19,10 +20,10 @@ const RemoveLiquidity = () => {
 
   // Refresh positions when component mounts
   useEffect(() => {
-    if (isConnected && contractsDeployed) {
+    if (isConnected) {
       fetchPositions();
     }
-  }, [isConnected, contractsDeployed, fetchPositions]);
+  }, [isConnected, fetchPositions]);
 
   // Auto-select first position if available
   useEffect(() => {
@@ -40,15 +41,6 @@ const RemoveLiquidity = () => {
       toast({
         title: "Wallet Not Connected",
         description: "Please connect your wallet to remove liquidity",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!contractsDeployed) {
-      toast({
-        title: "Contracts Not Deployed",
-        description: "Please deploy your DEX contracts first",
         variant: "destructive"
       });
       return;
@@ -102,22 +94,6 @@ const RemoveLiquidity = () => {
     };
   };
 
-  if (!contractsDeployed) {
-    return (
-      <Card className="max-w-lg mx-auto">
-        <CardContent className="text-center p-12">
-          <h3 className="text-lg font-semibold mb-2">Contracts Not Deployed</h3>
-          <p className="text-muted-foreground mb-4">
-            Deploy your DEX contracts to manage liquidity
-          </p>
-          <Button variant="outline" disabled>
-            Deploy Contracts First
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
   const outputAmounts = calculateOutputAmounts();
 
   return (
@@ -126,6 +102,13 @@ const RemoveLiquidity = () => {
         <CardTitle>Remove Liquidity</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
+        <Alert className="mb-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            This is a demo mode. In production, you would interact with deployed DEX contracts.
+          </AlertDescription>
+        </Alert>
+
         {/* Pair Selection */}
         <div className="space-y-2">
           <Label>Select Pair</Label>

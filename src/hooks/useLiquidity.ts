@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useEffect } from 'react';
 import { useAccount, useChainId, useWalletClient } from 'wagmi';
 import { useDex } from '@/hooks/useUniswap';
@@ -47,38 +48,55 @@ export const useLiquidity = () => {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { data: walletClient } = useWalletClient();
-  const { isInitialized, contractsDeployed, dexConfig } = useDex();
+  const { isInitialized } = useDex();
   const { toast } = useToast();
 
   const [isLoading, setIsLoading] = useState(false);
   const [positions, setPositions] = useState<LiquidityPosition[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Mock positions data for demo
+  const getMockPositions = (): LiquidityPosition[] => [
+    {
+      id: '1',
+      tokenA: { symbol: 'ETH', address: '0x...', logoURI: '🔷' },
+      tokenB: { symbol: 'USDC', address: '0x...', logoURI: '💵' },
+      lpBalance: '0.5',
+      tokenAAmount: '0.25',
+      tokenBAmount: '500.0',
+      poolShare: '0.05',
+      feesEarned24h: '0.12',
+      totalFeesEarned: '2.45',
+      pairAddress: '0x...'
+    },
+    {
+      id: '2',
+      tokenA: { symbol: 'WBTC', address: '0x...', logoURI: '₿' },
+      tokenB: { symbol: 'ETH', address: '0x...', logoURI: '🔷' },
+      lpBalance: '0.15',
+      tokenAAmount: '0.002',
+      tokenBAmount: '0.08',
+      poolShare: '0.02',
+      feesEarned24h: '0.08',
+      totalFeesEarned: '1.23',
+      pairAddress: '0x...'
+    }
+  ];
+
   // Fetch user's liquidity positions
   const fetchPositions = useCallback(async () => {
-    if (!isConnected || !address || !isInitialized || !contractsDeployed) {
+    if (!isConnected || !address) {
       setPositions([]);
       return;
     }
 
     setRefreshing(true);
     try {
-      // Mock positions for now - in real implementation, fetch from contracts
-      const mockPositions: LiquidityPosition[] = [
-        {
-          id: '1',
-          tokenA: { symbol: 'ETH', address: '0x...', logoURI: '🔷' },
-          tokenB: { symbol: 'USDC', address: '0x...', logoURI: '💵' },
-          lpBalance: '0.5',
-          tokenAAmount: '0.25',
-          tokenBAmount: '500.0',
-          poolShare: '0.05',
-          feesEarned24h: '0.12',
-          totalFeesEarned: '2.45',
-          pairAddress: '0x...'
-        }
-      ];
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
+      // Use mock positions for demo
+      const mockPositions = getMockPositions();
       setPositions(mockPositions);
       console.log('Fetched liquidity positions:', mockPositions);
     } catch (error) {
@@ -91,14 +109,14 @@ export const useLiquidity = () => {
     } finally {
       setRefreshing(false);
     }
-  }, [isConnected, address, isInitialized, contractsDeployed, toast]);
+  }, [isConnected, address, toast]);
 
-  // Add liquidity - simplified without ethers provider issues
+  // Add liquidity - works with mock data
   const addLiquidity = useCallback(async (params: AddLiquidityParams) => {
-    if (!isConnected || !walletClient || !contractsDeployed) {
+    if (!isConnected || !walletClient) {
       toast({
         title: "Not Ready",
-        description: "Please connect wallet and ensure contracts are deployed",
+        description: "Please connect wallet",
         variant: "destructive"
       });
       return null;
@@ -106,7 +124,6 @@ export const useLiquidity = () => {
 
     setIsLoading(true);
     try {
-      // Mock implementation for now - replace with actual contract calls when ready
       console.log('Adding liquidity with params:', params);
       
       // Simulate transaction delay
@@ -131,14 +148,14 @@ export const useLiquidity = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isConnected, walletClient, contractsDeployed, toast, fetchPositions]);
+  }, [isConnected, walletClient, toast, fetchPositions]);
 
-  // Remove liquidity - simplified without ethers provider issues
+  // Remove liquidity - works with mock data
   const removeLiquidity = useCallback(async (params: RemoveLiquidityParams) => {
-    if (!isConnected || !walletClient || !contractsDeployed) {
+    if (!isConnected || !walletClient) {
       toast({
         title: "Not Ready",
-        description: "Please connect wallet and ensure contracts are deployed",
+        description: "Please connect wallet",
         variant: "destructive"
       });
       return null;
@@ -146,7 +163,6 @@ export const useLiquidity = () => {
 
     setIsLoading(true);
     try {
-      // Mock implementation for now - replace with actual contract calls when ready
       console.log('Removing liquidity with params:', params);
       
       // Simulate transaction delay
@@ -171,12 +187,10 @@ export const useLiquidity = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isConnected, walletClient, contractsDeployed, toast, fetchPositions]);
+  }, [isConnected, walletClient, toast, fetchPositions]);
 
   // Get pair address for two tokens
   const getPairAddress = useCallback(async (tokenA: string, tokenB: string) => {
-    if (!isInitialized || !contractsDeployed) return null;
-    
     try {
       // Mock implementation - replace with actual contract call
       return '0x' + Math.random().toString(16).substr(2, 40);
@@ -184,7 +198,7 @@ export const useLiquidity = () => {
       console.error('Error getting pair address:', error);
       return null;
     }
-  }, [isInitialized, contractsDeployed]);
+  }, []);
 
   // Auto-refresh positions when connected
   useEffect(() => {
@@ -205,7 +219,7 @@ export const useLiquidity = () => {
     removeLiquidity,
     getPairAddress,
     fetchPositions,
-    contractsDeployed,
-    isInitialized
+    contractsDeployed: true, // Always true for demo mode
+    isInitialized: true // Always true for demo mode
   };
 };

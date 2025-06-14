@@ -3,21 +3,22 @@ import React, { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Minus, ExternalLink, RefreshCw, Loader2 } from 'lucide-react';
+import { Plus, Minus, ExternalLink, RefreshCw, Loader2, AlertTriangle } from 'lucide-react';
 import { useAccount, useChainId } from 'wagmi';
 import { useLiquidity } from '@/hooks/useLiquidity';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const LiquidityPositions = () => {
   const { isConnected } = useAccount();
   const chainId = useChainId();
-  const { positions, refreshing, fetchPositions, contractsDeployed } = useLiquidity();
+  const { positions, refreshing, fetchPositions } = useLiquidity();
 
   // Auto-refresh positions
   useEffect(() => {
-    if (isConnected && contractsDeployed) {
+    if (isConnected) {
       fetchPositions();
     }
-  }, [isConnected, contractsDeployed, fetchPositions]);
+  }, [isConnected, fetchPositions]);
 
   const getExplorerUrl = (address: string) => {
     const explorers = {
@@ -45,26 +46,16 @@ const LiquidityPositions = () => {
     );
   }
 
-  if (!contractsDeployed) {
-    return (
-      <Card>
-        <CardContent className="text-center p-12">
-          <h3 className="text-lg font-semibold mb-2">Contracts Not Deployed</h3>
-          <p className="text-muted-foreground mb-4">
-            Deploy your DEX contracts to start providing liquidity
-          </p>
-          <Button variant="outline" disabled>
-            Deploy Contracts First
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
   if (positions.length === 0 && !refreshing) {
     return (
       <Card>
         <CardContent className="text-center p-12">
+          <Alert className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              This is a demo mode. In production, you would see real liquidity positions from deployed contracts.
+            </AlertDescription>
+          </Alert>
           <h3 className="text-lg font-semibold mb-2">No Liquidity Positions</h3>
           <p className="text-muted-foreground mb-4">
             You don't have any liquidity positions yet
@@ -83,6 +74,13 @@ const LiquidityPositions = () => {
 
   return (
     <div className="space-y-4">
+      <Alert className="mb-4">
+        <AlertTriangle className="h-4 w-4" />
+        <AlertDescription>
+          This is a demo mode showing mock liquidity positions. In production, these would be real positions from deployed DEX contracts.
+        </AlertDescription>
+      </Alert>
+
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-3">
           <h3 className="text-lg font-semibold">Your Liquidity Positions</h3>
