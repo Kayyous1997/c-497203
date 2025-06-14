@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -11,7 +12,8 @@ import {
   ExternalLink,
   DollarSign,
   Activity,
-  Users
+  Users,
+  Globe
 } from 'lucide-react';
 import { useDexScreener } from '@/hooks/useDexScreener';
 import { DexScreenerPair } from '@/services/dexScreenerService';
@@ -19,6 +21,9 @@ import { DexScreenerPair } from '@/services/dexScreenerService';
 const CryptoChart = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [showPairsList, setShowPairsList] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedChain, setSelectedChain] = useState('ethereum');
+  const [searchTimeout, setSearchTimeout] = useState<NodeJS.Timeout | null>(null);
   
   const {
     pairs,
@@ -31,6 +36,16 @@ const CryptoChart = () => {
     dexScreenerService
   } = useDexScreener();
 
+  // Chain options for the selector
+  const chainOptions = [
+    { value: 'ethereum', label: 'Ethereum', emoji: '🔷' },
+    { value: 'bsc', label: 'BSC', emoji: '🟡' },
+    { value: 'polygon', label: 'Polygon', emoji: '🟣' },
+    { value: 'arbitrum', label: 'Arbitrum', emoji: '🔵' },
+    { value: 'base', label: 'Base', emoji: '🔵' },
+    { value: 'solana', label: 'Solana', emoji: '🟢' },
+  ];
+
   // Initialize with Bitcoin search
   useEffect(() => {
     searchToken('bitcoin');
@@ -42,14 +57,16 @@ const CryptoChart = () => {
     
     if (!query) {
       setShowPairsList(false);
+      setShowSuggestions(false);
       return;
     }
 
-    console.log('Searching for:', query);
+    console.log('Searching for:', query, 'on chain:', selectedChain);
     
     try {
       await searchToken(query);
       setShowPairsList(true);
+      setShowSuggestions(false);
     } catch (error) {
       console.error('Search error:', error);
     }
@@ -59,23 +76,44 @@ const CryptoChart = () => {
     const value = e.target.value;
     setSearchQuery(value);
     
-    // Auto-search as user types (debounced)
+    // Clear existing timeout
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+    
+    // Auto-search and show suggestions as user types
     if (value.length >= 2) {
-      const timeoutId = setTimeout(() => {
-        searchToken(value.trim());
-        setShowPairsList(true);
-      }, 500);
+      setShowSuggestions(true);
+      const newTimeout = setTimeout(async () => {
+        try {
+          await searchToken(value.trim());
+          setShowPairsList(true);
+        } catch (error) {
+          console.error('Auto-search error:', error);
+        }
+      }, 300); // 300ms debounce
       
-      return () => clearTimeout(timeoutId);
+      setSearchTimeout(newTimeout);
     } else if (value.length === 0) {
       setShowPairsList(false);
+      setShowSuggestions(false);
     }
   };
 
   const handlePairSelect = (pair: DexScreenerPair) => {
     selectPair(pair);
     setShowPairsList(false);
+    setShowSuggestions(false);
     setSearchQuery(pair.baseToken.symbol);
+  };
+
+  const handleChainChange = (chainValue: string) => {
+    setSelectedChain(chainValue);
+    console.log('Chain changed to:', chainValue);
+    // Re-search with new chain if there's a current search
+    if (searchQuery.trim()) {
+      searchToken(searchQuery.trim());
+    }
   };
 
   const getPriceChangeColor = (change: number) => {
@@ -88,23 +126,55 @@ const CryptoChart = () => {
     return change >= 0 ? TrendingUp : TrendingDown;
   };
 
+  const isContractAddress = (query: string) => {
+    return query.startsWith('0x') && query.length === 42;
+  };
+
   return (
     <div className="glass-card p-6 rounded-lg mb-8 animate-fade-in">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-xl font-semibold">Token Chart</h2>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* Chain Selector */}
+          <div className="flex items-center gap-2">
+            <Globe className="h-4 w-4 text-muted-foreground" />
+            <Select value={selectedChain} onValueChange={handleChainChange}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {chainOptions.map((chain) => (
+                  <SelectItem key={chain.value} value={chain.value}>
+                    <div className="flex items-center gap-2">
+                      <span>{chain.emoji}</span>
+                      <span>{chain.label}</span>
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Search Form */}
           <form onSubmit={handleSearch} className="flex items-center gap-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 type="text"
-                placeholder="Search token or paste address..."
+                placeholder={`Search by symbol${isContractAddress(searchQuery) ? ' or contract address' : ''}`}
                 value={searchQuery}
                 onChange={handleInputChange}
-                className="pl-10 w-64"
+                className="pl-10 w-80"
                 disabled={isLoading}
               />
+              {searchQuery && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                  <Badge variant="outline" className="text-xs">
+                    {isContractAddress(searchQuery) ? 'Address' : 'Symbol'}
+                  </Badge>
+                </div>
+              )}
             </div>
             <Button type="submit" size="sm" disabled={isLoading || !searchQuery.trim()}>
               {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Search'}
@@ -130,25 +200,33 @@ const CryptoChart = () => {
         </div>
       )}
 
-      {/* Pairs Selection */}
-      {showPairsList && pairs.length > 0 && (
+      {/* Auto-suggestions or Search Results */}
+      {(showPairsList || showSuggestions) && pairs.length > 0 && (
         <Card className="mb-6 border-muted/20 bg-card/80 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="text-lg flex items-center justify-between">
-              Search Results
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => setShowPairsList(false)}
-                className="h-6 w-6 p-0"
-              >
-                ×
-              </Button>
+              {showSuggestions ? 'Suggestions' : 'Search Results'}
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">
+                  {chainOptions.find(c => c.value === selectedChain)?.emoji} {chainOptions.find(c => c.value === selectedChain)?.label}
+                </Badge>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => {
+                    setShowPairsList(false);
+                    setShowSuggestions(false);
+                  }}
+                  className="h-6 w-6 p-0"
+                >
+                  ×
+                </Button>
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid gap-2 max-h-60 overflow-y-auto">
-              {pairs.slice(0, 10).map((pair, index) => (
+              {pairs.slice(0, 8).map((pair, index) => (
                 <Button
                   key={`${pair.pairAddress}-${index}`}
                   variant="ghost"
@@ -164,6 +242,11 @@ const CryptoChart = () => {
                         <div className="text-sm text-muted-foreground">
                           {pair.dexId} • {pair.baseToken.name}
                         </div>
+                        {isContractAddress(searchQuery) && (
+                          <div className="text-xs text-muted-foreground font-mono">
+                            {pair.baseToken.address.slice(0, 8)}...{pair.baseToken.address.slice(-6)}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="text-right">
@@ -183,13 +266,15 @@ const CryptoChart = () => {
       )}
 
       {/* No results message */}
-      {showPairsList && pairs.length === 0 && !isLoading && searchQuery && (
+      {(showPairsList || showSuggestions) && pairs.length === 0 && !isLoading && searchQuery && (
         <Card className="mb-6 border-muted/20 bg-card/80 backdrop-blur-sm">
           <CardContent className="p-6 text-center">
             <div className="text-muted-foreground">
               <Search className="h-8 w-8 mx-auto mb-2 opacity-50" />
               <p>No tokens found for "{searchQuery}"</p>
-              <p className="text-sm mt-1">Try searching for a different token symbol or contract address</p>
+              <p className="text-sm mt-1">
+                Try searching for a different token symbol or contract address on {chainOptions.find(c => c.value === selectedChain)?.label}
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -206,6 +291,7 @@ const CryptoChart = () => {
                   {selectedPair.baseToken.symbol}/{selectedPair.quoteToken.symbol}
                 </h3>
                 <Badge variant="secondary">{selectedPair.dexId}</Badge>
+                <Badge variant="outline">{selectedPair.chainId}</Badge>
               </div>
               <Button
                 variant="outline"
@@ -335,7 +421,7 @@ const CryptoChart = () => {
       )}
 
       {/* Empty State */}
-      {!selectedPair && !isLoading && pairs.length === 0 && !error && !showPairsList && (
+      {!selectedPair && !isLoading && pairs.length === 0 && !error && !showPairsList && !showSuggestions && (
         <div className="h-[400px] flex items-center justify-center">
           <div className="text-center">
             <Search className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
