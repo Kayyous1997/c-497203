@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -311,7 +310,7 @@ const CryptoChart = () => {
                 </div>
               </div>
             </CardContent>
-          </div>
+          </Card>
 
           {/* DEX Screener Embedded Chart */}
           <div className="h-[500px] w-full">
