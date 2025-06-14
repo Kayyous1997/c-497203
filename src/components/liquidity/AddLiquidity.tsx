@@ -1,15 +1,15 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Settings, Loader2, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Plus, Settings, Loader2, AlertTriangle, CheckCircle, PlusCircle } from 'lucide-react';
 import { useAccount, useChainId } from 'wagmi';
 import { useDex } from '@/hooks/useUniswap';
 import { useLiquidity } from '@/hooks/useLiquidity';
 import { useToast } from '@/hooks/use-toast';
 import TokenSelectorModal from '@/components/TokenSelectorModal';
+import NewTokenCreator from './NewTokenCreator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 // Use the same Token interface as TokenSelectorModal expects
@@ -22,6 +22,14 @@ interface Token {
   volume24h?: number;
   logoUrl?: string;
   logoSource?: string;
+}
+
+interface NewTokenData {
+  name: string;
+  symbol: string;
+  decimals: number;
+  totalSupply: string;
+  description?: string;
 }
 
 const AddLiquidity = () => {
@@ -41,9 +49,11 @@ const AddLiquidity = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [priceRatio, setPriceRatio] = useState<string>('');
   const [shareOfPool, setShareOfPool] = useState<string>('');
-  const [step, setStep] = useState<'input' | 'approve' | 'confirm' | 'pending' | 'success'>('input');
+  const [step, setStep] = useState<'input' | 'approve' | 'confirm' | 'pending' | 'success' | 'create-token'>('input');
   const [approvalA, setApprovalA] = useState(false);
   const [approvalB, setApprovalB] = useState(false);
+  const [showNewTokenCreator, setShowNewTokenCreator] = useState(false);
+  const [tokenCreationType, setTokenCreationType] = useState<'A' | 'B' | null>(null);
 
   // Calculate price ratio and pool share in real-time
   useEffect(() => {
@@ -69,6 +79,44 @@ const AddLiquidity = () => {
     setTokenB(token);
     setIsTokenBModalOpen(false);
     setStep('input'); // Reset step when changing tokens
+  };
+
+  const handleNewTokenAClick = () => {
+    setTokenCreationType('A');
+    setShowNewTokenCreator(true);
+    setIsTokenAModalOpen(false);
+  };
+
+  const handleNewTokenBClick = () => {
+    setTokenCreationType('B');
+    setShowNewTokenCreator(true);
+    setIsTokenBModalOpen(false);
+  };
+
+  const handleTokenCreated = (tokenAddress: string, tokenData: NewTokenData) => {
+    const newToken: Token = {
+      symbol: tokenData.symbol,
+      name: tokenData.name,
+      address: tokenAddress,
+      icon: '🪙',
+      price: 0,
+      logoUrl: undefined
+    };
+
+    if (tokenCreationType === 'A') {
+      setTokenA(newToken);
+    } else if (tokenCreationType === 'B') {
+      setTokenB(newToken);
+    }
+
+    setShowNewTokenCreator(false);
+    setTokenCreationType(null);
+    setStep('input');
+  };
+
+  const handleCancelTokenCreation = () => {
+    setShowNewTokenCreator(false);
+    setTokenCreationType(null);
   };
 
   const handleAmountAChange = (value: string) => {
@@ -187,6 +235,16 @@ const AddLiquidity = () => {
   const isFormValid = tokenA && tokenB && amountA && amountB && 
                      parseFloat(amountA) > 0 && parseFloat(amountB) > 0;
 
+  // Show new token creator if requested
+  if (showNewTokenCreator) {
+    return (
+      <NewTokenCreator
+        onTokenCreated={handleTokenCreated}
+        onCancel={handleCancelTokenCreation}
+      />
+    );
+  }
+
   const getStepContent = () => {
     switch (step) {
       case 'input':
@@ -247,6 +305,15 @@ const AddLiquidity = () => {
                   className="flex-1"
                 />
               </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleNewTokenAClick}
+                className="w-full text-xs"
+              >
+                <PlusCircle className="mr-1 h-3 w-3" />
+                Create New Token A
+              </Button>
             </div>
 
             <div className="flex justify-center">
@@ -283,6 +350,15 @@ const AddLiquidity = () => {
                   className="flex-1"
                 />
               </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleNewTokenBClick}
+                className="w-full text-xs"
+              >
+                <PlusCircle className="mr-1 h-3 w-3" />
+                Create New Token B
+              </Button>
             </div>
 
             {/* Real-time Price and Pool Info */}
