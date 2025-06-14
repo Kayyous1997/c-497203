@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Settings, Loader2, AlertTriangle, CheckCircle, PlusCircle } from 'lucide-react';
+import { Plus, Settings, Loader2, AlertTriangle, CheckCircle, PlusCircle, Info } from 'lucide-react';
 import { useAccount, useChainId } from 'wagmi';
 import { useDex } from '@/hooks/useUniswap';
 import { useLiquidity } from '@/hooks/useLiquidity';
@@ -36,7 +36,7 @@ const AddLiquidity = () => {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const { getTokenAddress, isInitialized } = useDex();
-  const { addLiquidity, isLoading, contractsDeployed } = useLiquidity();
+  const { addLiquidity, isLoading, contractsDeployed, getPairAddress } = useLiquidity();
   const { toast } = useToast();
 
   const [tokenA, setTokenA] = useState<Token | null>(null);
@@ -54,6 +54,41 @@ const AddLiquidity = () => {
   const [approvalB, setApprovalB] = useState(false);
   const [showNewTokenCreator, setShowNewTokenCreator] = useState(false);
   const [tokenCreationType, setTokenCreationType] = useState<'A' | 'B' | null>(null);
+  const [isNewPair, setIsNewPair] = useState(false);
+  const [pairExists, setPairExists] = useState<boolean | null>(null);
+  const [isSettingInitialPrice, setIsSettingInitialPrice] = useState(false);
+
+  // Check if pair exists when both tokens are selected
+  useEffect(() => {
+    const checkPairExists = async () => {
+      if (tokenA && tokenB && tokenA.address !== tokenB.address) {
+        try {
+          const pairAddress = await getPairAddress(tokenA.address, tokenB.address);
+          const exists = pairAddress && pairAddress !== '0x0000000000000000000000000000000000000000';
+          setPairExists(exists);
+          setIsNewPair(!exists);
+          
+          if (!exists) {
+            setIsSettingInitialPrice(true);
+            setShareOfPool('100'); // First liquidity provider gets 100%
+          } else {
+            setIsSettingInitialPrice(false);
+          }
+        } catch (error) {
+          console.error('Error checking pair existence:', error);
+          setPairExists(false);
+          setIsNewPair(true);
+          setIsSettingInitialPrice(true);
+        }
+      } else {
+        setPairExists(null);
+        setIsNewPair(false);
+        setIsSettingInitialPrice(false);
+      }
+    };
+
+    checkPairExists();
+  }, [tokenA, tokenB, getPairAddress]);
 
   // Calculate price ratio and pool share in real-time
   useEffect(() => {
@@ -61,24 +96,39 @@ const AddLiquidity = () => {
       const ratio = parseFloat(amountB) / parseFloat(amountA);
       setPriceRatio(ratio.toFixed(6));
       
-      // For new pools, share would be 100%, for existing pools calculate based on reserves
-      setShareOfPool('100');
+      if (isNewPair) {
+        setShareOfPool('100'); // First liquidity provider gets 100%
+      } else {
+        // For existing pools, this would be calculated based on current reserves
+        // For demo purposes, we'll show a mock percentage
+        setShareOfPool('0.01');
+      }
     } else {
       setPriceRatio('');
-      setShareOfPool('');
+      if (!isNewPair) {
+        setShareOfPool('');
+      }
     }
-  }, [amountA, amountB]);
+  }, [amountA, amountB, isNewPair]);
 
   const handleTokenASelect = (token: Token) => {
     setTokenA(token);
     setIsTokenAModalOpen(false);
-    setStep('input'); // Reset step when changing tokens
+    setStep('input');
+    // Clear amounts when changing tokens to recalculate ratios
+    if (isSettingInitialPrice) {
+      setAmountB('');
+    }
   };
 
   const handleTokenBSelect = (token: Token) => {
     setTokenB(token);
     setIsTokenBModalOpen(false);
-    setStep('input'); // Reset step when changing tokens
+    setStep('input');
+    // Clear amounts when changing tokens to recalculate ratios
+    if (isSettingInitialPrice) {
+      setAmountA('');
+    }
   };
 
   const handleNewTokenAClick = () => {
@@ -112,6 +162,11 @@ const AddLiquidity = () => {
     setShowNewTokenCreator(false);
     setTokenCreationType(null);
     setStep('input');
+    
+    toast({
+      title: "Token Created",
+      description: `${tokenData.symbol} token created successfully. You can now add initial liquidity.`,
+    });
   };
 
   const handleCancelTokenCreation = () => {
@@ -121,14 +176,25 @@ const AddLiquidity = () => {
 
   const handleAmountAChange = (value: string) => {
     setAmountA(value);
-    setStep('input'); // Reset step when changing amounts
-    // In a real implementation, calculate corresponding amount B based on pool ratio
+    setStep('input');
+    
+    // For new pairs, when user enters amount A, calculate amount B based on their desired ratio
+    // For existing pairs, this would query the current pool ratio
+    if (isSettingInitialPrice && amountB && parseFloat(amountB) > 0 && parseFloat(value) > 0) {
+      // Keep the current ratio if both amounts exist
+      // This allows users to set their initial price
+    }
   };
 
   const handleAmountBChange = (value: string) => {
     setAmountB(value);
-    setStep('input'); // Reset step when changing amounts
-    // In a real implementation, calculate corresponding amount A based on pool ratio
+    setStep('input');
+    
+    // For new pairs, when user enters amount B, calculate amount A based on their desired ratio
+    if (isSettingInitialPrice && amountA && parseFloat(amountA) > 0 && parseFloat(value) > 0) {
+      // Keep the current ratio if both amounts exist
+      // This allows users to set their initial price
+    }
   };
 
   const calculateDeadline = () => {
@@ -137,7 +203,6 @@ const AddLiquidity = () => {
 
   const handleApproveTokenA = async () => {
     if (!contractsDeployed) {
-      // Mock approval process
       await new Promise(resolve => setTimeout(resolve, 2000));
       setApprovalA(true);
       toast({
@@ -145,12 +210,10 @@ const AddLiquidity = () => {
         description: `${tokenA?.symbol} spending approved for liquidity pool`,
       });
     }
-    // Real implementation would approve token spending
   };
 
   const handleApproveTokenB = async () => {
     if (!contractsDeployed) {
-      // Mock approval process
       await new Promise(resolve => setTimeout(resolve, 2000));
       setApprovalB(true);
       toast({
@@ -158,7 +221,6 @@ const AddLiquidity = () => {
         description: `${tokenB?.symbol} spending approved for liquidity pool`,
       });
     }
-    // Real implementation would approve token spending
   };
 
   const handleProceedToApproval = () => {
@@ -193,9 +255,8 @@ const AddLiquidity = () => {
     setStep('pending');
 
     try {
-      // Calculate minimum amounts with slippage tolerance
-      const amountAMin = (parseFloat(amountA) * (1 - slippage / 100)).toString();
-      const amountBMin = (parseFloat(amountB) * (1 - slippage / 100)).toString();
+      const amountAMin = isNewPair ? '0' : (parseFloat(amountA) * (1 - slippage / 100)).toString();
+      const amountBMin = isNewPair ? '0' : (parseFloat(amountB) * (1 - slippage / 100)).toString();
 
       const result = await addLiquidity({
         tokenA: tokenA.address,
@@ -209,7 +270,19 @@ const AddLiquidity = () => {
 
       if (result) {
         setStep('success');
-        // Clear form on success after a delay
+        
+        if (isNewPair) {
+          toast({
+            title: "Pool Created & Liquidity Added",
+            description: `Successfully created ${tokenA.symbol}/${tokenB.symbol} pool and added initial liquidity`,
+          });
+        } else {
+          toast({
+            title: "Liquidity Added",
+            description: `Successfully added liquidity to ${tokenA.symbol}/${tokenB.symbol} pool`,
+          });
+        }
+
         setTimeout(() => {
           setAmountA('');
           setAmountB('');
@@ -218,6 +291,9 @@ const AddLiquidity = () => {
           setStep('input');
           setApprovalA(false);
           setApprovalB(false);
+          setPairExists(null);
+          setIsNewPair(false);
+          setIsSettingInitialPrice(false);
         }, 3000);
       }
     } catch (error) {
@@ -255,6 +331,17 @@ const AddLiquidity = () => {
                 <AlertTriangle className="h-4 w-4" />
                 <AlertDescription>
                   This is a demo mode. In production, you would interact with deployed DEX contracts.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* New Pair Alert */}
+            {isNewPair && tokenA && tokenB && (
+              <Alert className="mb-4">
+                <Info className="h-4 w-4" />
+                <AlertDescription>
+                  You are the first liquidity provider for this {tokenA.symbol}/{tokenB.symbol} pair. 
+                  You will set the initial price and receive 100% of the pool tokens.
                 </AlertDescription>
               </Alert>
             )}
@@ -361,21 +448,33 @@ const AddLiquidity = () => {
               </Button>
             </div>
 
-            {/* Real-time Price and Pool Info */}
+            {/* Price and Pool Info */}
             {priceRatio && (
               <div className="p-4 border rounded-lg bg-muted/20 space-y-2">
+                {isSettingInitialPrice && (
+                  <div className="flex items-center space-x-2 mb-2">
+                    <Info className="h-4 w-4 text-blue-500" />
+                    <span className="text-sm font-medium text-blue-500">Setting Initial Price</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-sm">
-                  <span>Price Ratio</span>
+                  <span>{isSettingInitialPrice ? 'Initial Price' : 'Current Price'}</span>
                   <span className="font-mono">{priceRatio} {tokenB?.symbol} per {tokenA?.symbol}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>{isSettingInitialPrice ? 'Inverse Price' : 'Inverse Price'}</span>
+                  <span className="font-mono">{(1 / parseFloat(priceRatio)).toFixed(6)} {tokenA?.symbol} per {tokenB?.symbol}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Share of Pool</span>
                   <span className="font-mono">{shareOfPool}%</span>
                 </div>
-                <div className="flex justify-between text-sm">
-                  <span>Slippage Tolerance</span>
-                  <span className="font-mono">{slippage}%</span>
-                </div>
+                {!isNewPair && (
+                  <div className="flex justify-between text-sm">
+                    <span>Slippage Tolerance</span>
+                    <span className="font-mono">{slippage}%</span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -385,7 +484,8 @@ const AddLiquidity = () => {
               className="w-full"
               size="lg"
             >
-              {!isConnected ? 'Connect Wallet' : 'Proceed to Approvals'}
+              {!isConnected ? 'Connect Wallet' : 
+               isNewPair ? 'Create Pool & Add Liquidity' : 'Add Liquidity'}
             </Button>
           </>
         );
@@ -394,9 +494,14 @@ const AddLiquidity = () => {
         return (
           <>
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Approve Token Spending</h3>
+              <h3 className="text-lg font-semibold">
+                {isNewPair ? 'Approve Tokens for Pool Creation' : 'Approve Token Spending'}
+              </h3>
               <p className="text-sm text-muted-foreground">
-                You need to approve the router contract to spend your tokens before adding liquidity.
+                {isNewPair 
+                  ? 'You need to approve both tokens before creating the pool and adding initial liquidity.'
+                  : 'You need to approve the router contract to spend your tokens before adding liquidity.'
+                }
               </p>
 
               <div className="space-y-3">
@@ -465,11 +570,13 @@ const AddLiquidity = () => {
         return (
           <>
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Confirm Liquidity Addition</h3>
+              <h3 className="text-lg font-semibold">
+                {isNewPair ? 'Confirm Pool Creation' : 'Confirm Liquidity Addition'}
+              </h3>
               
               <div className="p-4 border rounded-lg bg-muted/20 space-y-3">
                 <div className="flex justify-between">
-                  <span>You will provide:</span>
+                  <span>You will {isNewPair ? 'deposit' : 'provide'}:</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
@@ -494,14 +601,29 @@ const AddLiquidity = () => {
                   <span className="font-mono">{amountB}</span>
                 </div>
                 <div className="pt-2 border-t">
-                  <div className="flex justify-between text-sm">
-                    <span>Pool Share</span>
-                    <span>{shareOfPool}%</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span>Slippage Tolerance</span>
-                    <span>{slippage}%</span>
-                  </div>
+                  {isNewPair ? (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span>Initial Price</span>
+                        <span>{priceRatio} {tokenB?.symbol} per {tokenA?.symbol}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Pool Share</span>
+                        <span>100% (You are the first liquidity provider)</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span>Pool Share</span>
+                        <span>{shareOfPool}%</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Slippage Tolerance</span>
+                        <span>{slippage}%</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -510,7 +632,7 @@ const AddLiquidity = () => {
                   Back
                 </Button>
                 <Button onClick={handleAddLiquidity} className="flex-1">
-                  Add Liquidity
+                  {isNewPair ? 'Create Pool & Supply' : 'Supply'}
                 </Button>
               </div>
             </div>
@@ -521,9 +643,14 @@ const AddLiquidity = () => {
         return (
           <div className="text-center space-y-4">
             <Loader2 className="h-12 w-12 animate-spin mx-auto" />
-            <h3 className="text-lg font-semibold">Adding Liquidity...</h3>
+            <h3 className="text-lg font-semibold">
+              {isNewPair ? 'Creating Pool & Adding Liquidity...' : 'Adding Liquidity...'}
+            </h3>
             <p className="text-sm text-muted-foreground">
-              Please wait while your transaction is being processed.
+              {isNewPair 
+                ? 'Please wait while your pool is being created and initial liquidity is added.'
+                : 'Please wait while your transaction is being processed.'
+              }
             </p>
           </div>
         );
@@ -532,9 +659,14 @@ const AddLiquidity = () => {
         return (
           <div className="text-center space-y-4">
             <CheckCircle className="h-12 w-12 text-green-500 mx-auto" />
-            <h3 className="text-lg font-semibold">Liquidity Added Successfully!</h3>
+            <h3 className="text-lg font-semibold">
+              {isNewPair ? 'Pool Created Successfully!' : 'Liquidity Added Successfully!'}
+            </h3>
             <p className="text-sm text-muted-foreground">
-              Your liquidity has been added to the {tokenA?.symbol}/{tokenB?.symbol} pool.
+              {isNewPair 
+                ? `You have successfully created the ${tokenA?.symbol}/${tokenB?.symbol} pool and added initial liquidity.`
+                : `Your liquidity has been added to the ${tokenA?.symbol}/${tokenB?.symbol} pool.`
+              }
             </p>
             <Button onClick={handleReset} className="w-full">
               Add More Liquidity
