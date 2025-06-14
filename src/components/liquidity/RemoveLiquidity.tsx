@@ -105,7 +105,7 @@ const RemoveLiquidity = () => {
         <Alert className="mb-4">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            This is a demo mode. In production, you would interact with deployed DEX contracts.
+            This is a demo mode showing mock liquidity removal. In production, this would interact with deployed DEX contracts.
           </AlertDescription>
         </Alert>
 
