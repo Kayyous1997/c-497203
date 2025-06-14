@@ -97,6 +97,27 @@ class DexScreenerService {
     }
   }
 
+  async getPopularTokens(): Promise<DexScreenerPair[]> {
+    try {
+      // Get popular tokens by searching for high-volume pairs
+      const popularQueries = ['ETH', 'USDC', 'USDT', 'WBTC', 'PEPE'];
+      const allPairs: DexScreenerPair[] = [];
+
+      for (const query of popularQueries) {
+        const pairs = await this.searchPairs(query);
+        // Take the first pair for each popular token
+        if (pairs.length > 0) {
+          allPairs.push(pairs[0]);
+        }
+      }
+
+      return allPairs;
+    } catch (error) {
+      console.error('Error fetching popular tokens from DEX Screener:', error);
+      return [];
+    }
+  }
+
   formatPrice(price: string | number): string {
     const numPrice = typeof price === 'string' ? parseFloat(price) : price;
     if (numPrice >= 1) {
