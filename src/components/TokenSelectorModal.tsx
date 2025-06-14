@@ -5,9 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Search, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { tokenLogoService } from "@/services/tokenLogoService";
-import { dexScreenerService } from "@/services/dexScreenerService";
+import { uniswapPriceService } from "@/services/uniswapPriceService";
 import { useAccount } from "wagmi";
+import { useEthersProvider } from "@/hooks/useEthersProvider";
 
 interface Token {
   symbol: string;
@@ -29,67 +29,75 @@ interface TokenSelectorModalProps {
 
 const TokenSelectorModal = ({ open, onOpenChange, onSelectToken, selectedToken }: TokenSelectorModalProps) => {
   const { chain } = useAccount();
+  const provider = useEthersProvider();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Token[]>([]);
   const [popularTokens, setPopularTokens] = useState<Token[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isLoadingPopular, setIsLoadingPopular] = useState(true);
-  const [tokenLogos, setTokenLogos] = useState<Map<string, { url: string; source: string }>>(new Map());
+  const [tokenLogos, setTokenLogos] = useState<Map<string, string>>(new Map());
 
-  // Load popular tokens from DEX Screener
+  // Initialize Uniswap service
+  useEffect(() => {
+    if (provider && chain?.id) {
+      uniswapPriceService.initialize(provider, chain.id);
+    }
+  }, [provider, chain?.id]);
+
+  // Load popular tokens using Uniswap service
   useEffect(() => {
     const loadPopularTokens = async () => {
       if (!chain?.id) return;
       
       setIsLoadingPopular(true);
       try {
-        // Get popular tokens by searching for well-known symbols
-        const popularSymbols = ['ETH', 'USDC', 'USDT', 'WBTC', 'UNI'];
-        const tokenPromises = popularSymbols.map(async (symbol) => {
+        // Popular token addresses for mainnet
+        const popularTokenData = [
+          { symbol: 'ETH', name: 'Ethereum', address: '0x0000000000000000000000000000000000000000' },
+          { symbol: 'USDC', name: 'USD Coin', address: '0xA0b86a33E6Dc7237b51E4b23b3F38E834EFdA5AE' },
+          { symbol: 'USDT', name: 'Tether USD', address: '0xdAC17F958D2ee523a2206206994597C13D831ec7' },
+          { symbol: 'UNI', name: 'Uniswap', address: '0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984' },
+          { symbol: 'LINK', name: 'Chainlink', address: '0x514910771AF9Ca656af840dff83E8264EcF986CA' }
+        ];
+
+        const tokens: Token[] = [];
+        const logoPromises: Promise<void>[] = [];
+
+        for (const tokenData of popularTokenData) {
           try {
-            const pairs = await dexScreenerService.searchPairs(symbol);
-            const bestPair = pairs.find(p => 
-              p.baseToken.symbol.toUpperCase() === symbol.toUpperCase() ||
-              p.quoteToken.symbol.toUpperCase() === symbol.toUpperCase()
+            const priceData = await uniswapPriceService.getTokenPrice(
+              tokenData.symbol, 
+              tokenData.address, 
+              chain.id
             );
             
-            if (bestPair) {
-              const isBase = bestPair.baseToken.symbol.toUpperCase() === symbol.toUpperCase();
-              const token = isBase ? bestPair.baseToken : bestPair.quoteToken;
-              
-              return {
-                symbol: token.symbol,
-                name: token.name,
-                address: token.address,
-                icon: "❓",
-                price: parseFloat(bestPair.priceUsd || "0"),
-                volume24h: bestPair.volume?.h24 || 0
-              };
-            }
-            return null;
+            const token: Token = {
+              symbol: tokenData.symbol,
+              name: tokenData.name,
+              address: tokenData.address,
+              icon: "❓",
+              price: priceData?.price || 0,
+              volume24h: priceData?.volume24h || 0,
+              logoUrl: priceData?.logoUrl
+            };
+
+            tokens.push(token);
+
+            // Load logo asynchronously
+            logoPromises.push(
+              uniswapPriceService.getTokenLogo(token.address, chain.id, token.symbol).then((logoUrl) => {
+                setTokenLogos(prev => new Map(prev.set(token.address, logoUrl)));
+              })
+            );
           } catch (error) {
-            console.warn(`Failed to load ${symbol}:`, error);
-            return null;
+            console.warn(`Failed to load ${tokenData.symbol}:`, error);
           }
-        });
-
-        const tokens = (await Promise.all(tokenPromises)).filter(Boolean) as Token[];
-        setPopularTokens(tokens);
-
-        // Load logos for popular tokens
-        if (tokens.length > 0) {
-          const logoPromises = tokens.map(async (token) => {
-            const logo = await tokenLogoService.getTokenLogo(token.address, chain.id, token.symbol);
-            return { address: token.address, logo };
-          });
-
-          const logos = await Promise.all(logoPromises);
-          const logoMap = new Map();
-          logos.forEach(({ address, logo }) => {
-            logoMap.set(address, logo);
-          });
-          setTokenLogos(logoMap);
         }
+
+        setPopularTokens(tokens);
+        
+        // Load logos in background
+        Promise.all(logoPromises).catch(console.error);
       } catch (error) {
         console.error('Error loading popular tokens:', error);
       } finally {
@@ -100,7 +108,8 @@ const TokenSelectorModal = ({ open, onOpenChange, onSelectToken, selectedToken }
     loadPopularTokens();
   }, [chain?.id]);
 
-  // Search tokens using DEX Screener
+  // Search tokens - for now using a simple search through popular tokens
+  // In a real implementation, you'd search through Uniswap's token lists
   useEffect(() => {
     const searchTokens = async () => {
       if (!searchQuery.trim() || searchQuery.length < 2) {
@@ -110,38 +119,21 @@ const TokenSelectorModal = ({ open, onOpenChange, onSelectToken, selectedToken }
 
       setIsSearching(true);
       try {
-        const pairs = await dexScreenerService.searchPairs(searchQuery);
-        
-        // Convert pairs to tokens and fetch logos
-        const tokens: Token[] = [];
-        const logoPromises: Promise<void>[] = [];
+        // Simple search through popular tokens for now
+        // In production, you'd search through comprehensive token lists
+        const filteredTokens = popularTokens.filter(token =>
+          token.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          token.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          token.address.toLowerCase().includes(searchQuery.toLowerCase())
+        );
 
-        for (const pair of pairs.slice(0, 20)) { // Limit to 20 results
-          const token: Token = {
-            symbol: pair.baseToken.symbol,
-            name: pair.baseToken.name,
-            address: pair.baseToken.address,
-            icon: "❓",
-            price: parseFloat(pair.priceUsd || "0"),
-            volume24h: pair.volume?.h24 || 0
-          };
-
-          tokens.push(token);
-
-          // Load logo asynchronously
-          if (chain?.id) {
-            logoPromises.push(
-              tokenLogoService.getTokenLogo(token.address, chain.id, token.symbol).then((logo) => {
-                setTokenLogos(prev => new Map(prev.set(token.address, logo)));
-              })
-            );
-          }
+        // Add some mock search results for demonstration
+        if (filteredTokens.length === 0 && searchQuery.length >= 3) {
+          const mockResults = await this.generateMockSearchResults(searchQuery);
+          setSearchResults(mockResults);
+        } else {
+          setSearchResults(filteredTokens);
         }
-
-        setSearchResults(tokens);
-        
-        // Load logos in background
-        Promise.all(logoPromises).catch(console.error);
         
       } catch (error) {
         console.error('Error searching tokens:', error);
@@ -153,7 +145,41 @@ const TokenSelectorModal = ({ open, onOpenChange, onSelectToken, selectedToken }
 
     const timeoutId = setTimeout(searchTokens, 300); // Debounce
     return () => clearTimeout(timeoutId);
-  }, [searchQuery, chain?.id]);
+  }, [searchQuery, popularTokens, chain?.id]);
+
+  const generateMockSearchResults = async (query: string): Promise<Token[]> => {
+    // Mock search results based on query
+    const mockTokens = [
+      { symbol: 'WETH', name: 'Wrapped Ethereum', address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' },
+      { symbol: 'DAI', name: 'Dai Stablecoin', address: '0x6B175474E89094C44Da98b954EedeAC495271d0F' },
+      { symbol: 'WBTC', name: 'Wrapped Bitcoin', address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599' }
+    ];
+
+    const results: Token[] = [];
+    for (const mockToken of mockTokens) {
+      if (mockToken.symbol.toLowerCase().includes(query.toLowerCase()) ||
+          mockToken.name.toLowerCase().includes(query.toLowerCase())) {
+        
+        const priceData = await uniswapPriceService.getTokenPrice(
+          mockToken.symbol, 
+          mockToken.address, 
+          chain?.id || 1
+        );
+
+        results.push({
+          symbol: mockToken.symbol,
+          name: mockToken.name,
+          address: mockToken.address,
+          icon: "❓",
+          price: priceData?.price || 0,
+          volume24h: priceData?.volume24h || 0,
+          logoUrl: priceData?.logoUrl
+        });
+      }
+    }
+
+    return results;
+  };
 
   const handleTokenSelect = (token: Token) => {
     onSelectToken(token);
@@ -161,8 +187,7 @@ const TokenSelectorModal = ({ open, onOpenChange, onSelectToken, selectedToken }
   };
 
   const getTokenLogo = (token: Token) => {
-    const logoData = tokenLogos.get(token.address);
-    return logoData?.url || token.icon;
+    return tokenLogos.get(token.address) || token.logoUrl || token.icon;
   };
 
   const getTokenFallback = (token: Token) => {
@@ -263,7 +288,7 @@ const TokenSelectorModal = ({ open, onOpenChange, onSelectToken, selectedToken }
                       <div className="flex-1 text-left">
                         <div className="font-medium">{token.name}</div>
                         <div className="text-sm text-muted-foreground">
-                          {token.symbol} • ${dexScreenerService.formatPrice(token.price)}
+                          {token.symbol} • ${uniswapPriceService.formatPrice(token.price)}
                         </div>
                       </div>
 
@@ -271,7 +296,7 @@ const TokenSelectorModal = ({ open, onOpenChange, onSelectToken, selectedToken }
                         <div className="text-right">
                           <div className="text-sm text-muted-foreground">24h Vol</div>
                           <div className="text-sm font-medium">
-                            {dexScreenerService.formatVolume(token.volume24h)}
+                            {uniswapPriceService.formatVolume(token.volume24h)}
                           </div>
                         </div>
                       )}

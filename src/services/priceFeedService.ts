@@ -1,3 +1,4 @@
+import { uniswapPriceService, UniswapTokenPrice } from './uniswapPriceService';
 
 interface TokenPrice {
   symbol: string;
@@ -28,9 +29,9 @@ class PriceFeedService {
   private priceCache: Map<string, TokenPrice> = new Map();
   private historyCache: Map<string, PriceHistory[]> = new Map();
   private candlestickCache: Map<string, CandlestickData[]> = new Map();
-  private readonly CACHE_TTL = 60000; // 1 minute
+  private readonly CACHE_TTL = 30000; // 30 seconds for better performance
 
-  async getTokenPrice(symbol: string, address?: string): Promise<TokenPrice | null> {
+  async getTokenPrice(symbol: string, address?: string, chainId: number = 1): Promise<TokenPrice | null> {
     const cacheKey = address || symbol;
     const cached = this.priceCache.get(cacheKey);
     
@@ -39,20 +40,27 @@ class PriceFeedService {
     }
 
     try {
-      // Try CoinGecko first
+      // Try Uniswap service first for better performance
+      const uniswapPrice = await uniswapPriceService.getTokenPrice(symbol, address, chainId);
+      if (uniswapPrice) {
+        const tokenPrice: TokenPrice = {
+          symbol: uniswapPrice.symbol,
+          address: uniswapPrice.address,
+          price: uniswapPrice.price,
+          priceChange24h: uniswapPrice.priceChange24h,
+          volume24h: uniswapPrice.volume24h,
+          marketCap: uniswapPrice.marketCap,
+          lastUpdated: uniswapPrice.lastUpdated
+        };
+        this.priceCache.set(cacheKey, tokenPrice);
+        return tokenPrice;
+      }
+
+      // Fallback to CoinGecko
       const coinGeckoPrice = await this.fetchFromCoinGecko(symbol);
       if (coinGeckoPrice) {
         this.priceCache.set(cacheKey, coinGeckoPrice);
         return coinGeckoPrice;
-      }
-
-      // Fallback to DEX Screener if address is provided
-      if (address) {
-        const dexScreenerPrice = await this.fetchFromDexScreener(address);
-        if (dexScreenerPrice) {
-          this.priceCache.set(cacheKey, dexScreenerPrice);
-          return dexScreenerPrice;
-        }
       }
 
       return null;
@@ -155,35 +163,11 @@ class PriceFeedService {
       
       return {
         symbol: symbol.toUpperCase(),
-        address: '', // CoinGecko doesn't provide address in this endpoint
+        address: '',
         price: data.market_data.current_price.usd,
         priceChange24h: data.market_data.price_change_percentage_24h,
         volume24h: data.market_data.total_volume.usd,
         marketCap: data.market_data.market_cap.usd,
-        lastUpdated: Date.now()
-      };
-    } catch (error) {
-      return null;
-    }
-  }
-
-  private async fetchFromDexScreener(address: string): Promise<TokenPrice | null> {
-    try {
-      const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${address}`);
-      if (!response.ok) return null;
-      
-      const data = await response.json();
-      const pair = data.pairs?.[0];
-      
-      if (!pair) return null;
-
-      return {
-        symbol: pair.baseToken.symbol,
-        address,
-        price: parseFloat(pair.priceUsd),
-        priceChange24h: pair.priceChange.h24,
-        volume24h: pair.volume.h24,
-        marketCap: pair.marketCap || 0,
         lastUpdated: Date.now()
       };
     } catch (error) {
@@ -217,6 +201,7 @@ class PriceFeedService {
     this.priceCache.clear();
     this.historyCache.clear();
     this.candlestickCache.clear();
+    uniswapPriceService.clearCache();
   }
 }
 
