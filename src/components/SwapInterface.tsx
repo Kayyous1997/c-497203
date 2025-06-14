@@ -1,14 +1,17 @@
 
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ArrowUpDown, Settings, Loader2, AlertTriangle } from 'lucide-react';
-import { useAccount, useChainId } from 'wagmi';
-import { useDex } from '@/hooks/useUniswap';
-import { useToast } from '@/hooks/use-toast';
-import TokenSelectorModal from '@/components/TokenSelectorModal';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useState, useEffect } from "react";
+import { useAccount } from "wagmi";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+import { ArrowDown, ChevronDown, Settings, Info, AlertTriangle, Loader2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Label } from "@/components/ui/label";
+import TokenSelectorModal from "./TokenSelectorModal";
+import { useDex } from "@/hooks/useUniswap";
+import { useToast } from "@/hooks/use-toast";
+import { priceFeedService } from "@/services/priceFeedService";
+import { dexScreenerService } from "@/services/dexScreenerService";
 
 interface Token {
   symbol: string;
@@ -16,291 +19,589 @@ interface Token {
   address: string;
   icon: string;
   price: number;
-  volume24h?: number;
-  logoUrl?: string;
-  logoSource?: string;
 }
 
 const SwapInterface = () => {
-  const { address, isConnected } = useAccount();
-  const chainId = useChainId();
-  const { getQuote, executeSwap, isLoading } = useDex();
+  const { isConnected, address } = useAccount();
   const { toast } = useToast();
+  const { 
+    isInitialized, 
+    isLoading: dexLoading, 
+    quote, 
+    contractsDeployed,
+    getQuote, 
+    executeSwap, 
+    getTokenAddress,
+    currentChainId 
+  } = useDex();
 
-  const [fromToken, setFromToken] = useState<Token | null>(null);
-  const [toToken, setToToken] = useState<Token | null>(null);
-  const [fromAmount, setFromAmount] = useState('');
-  const [toAmount, setToAmount] = useState('');
-  const [isFromModalOpen, setIsFromModalOpen] = useState(false);
-  const [isToModalOpen, setIsToModalOpen] = useState(false);
-  const [slippage, setSlippage] = useState(0.5);
-  const [showSettings, setShowSettings] = useState(false);
-  const [priceImpact, setPriceImpact] = useState<string>('');
-  const [exchangeRate, setExchangeRate] = useState<string>('');
+  const [fromAmount, setFromAmount] = useState("");
+  const [toAmount, setToAmount] = useState("");
+  const [slippageTolerance, setSlippageTolerance] = useState("0.5");
+  const [customSlippage, setCustomSlippage] = useState("");
+  const [isCustomSlippage, setIsCustomSlippage] = useState(false);
+  const [fromToken, setFromToken] = useState<Token>({
+    symbol: "ETH",
+    name: "Ethereum",
+    address: "0x...",
+    icon: "",
+    price: 0
+  });
+  const [toToken, setToToken] = useState<Token>({
+    symbol: "USDC",
+    name: "USD Coin",
+    address: "0x...",
+    icon: "",
+    price: 0
+  });
+  const [isFromTokenModalOpen, setIsFromTokenModalOpen] = useState(false);
+  const [isToTokenModalOpen, setIsToTokenModalOpen] = useState(false);
+  const [isGettingQuote, setIsGettingQuote] = useState(false);
+  const [fromBalance, setFromBalance] = useState("0.00");
+  const [toBalance, setToBalance] = useState("0.00");
+  const [isLoadingPrices, setIsLoadingPrices] = useState(true);
 
-  // Mock exchange rate calculation
+  // Load initial token data and prices
   useEffect(() => {
-    if (fromToken && toToken && fromAmount && parseFloat(fromAmount) > 0) {
-      // Simulate price calculation based on mock token prices
-      const rate = toToken.price / fromToken.price;
-      const outputAmount = parseFloat(fromAmount) * rate * 0.997; // 0.3% fee
-      setToAmount(outputAmount.toFixed(6));
-      setExchangeRate(`1 ${fromToken.symbol} = ${rate.toFixed(6)} ${toToken.symbol}`);
-      setPriceImpact('0.12'); // Mock price impact
-    } else {
-      setToAmount('');
-      setExchangeRate('');
-      setPriceImpact('');
-    }
-  }, [fromToken, toToken, fromAmount]);
+    const loadInitialTokens = async () => {
+      setIsLoadingPrices(true);
+      try {
+        // Load ETH and USDC prices
+        const [ethPrice, usdcPrice] = await Promise.all([
+          priceFeedService.getTokenPrice("ETH"),
+          priceFeedService.getTokenPrice("USDC")
+        ]);
 
-  const handleFromTokenSelect = (token: Token) => {
-    setFromToken(token);
-    setIsFromModalOpen(false);
+        if (ethPrice) {
+          setFromToken(prev => ({ 
+            ...prev, 
+            price: ethPrice.price,
+            icon: "⟠"
+          }));
+        }
+
+        if (usdcPrice) {
+          setToToken(prev => ({ 
+            ...prev, 
+            price: usdcPrice.price,
+            icon: "💲"
+          }));
+        }
+      } catch (error) {
+        console.error('Error loading initial token data:', error);
+      } finally {
+        setIsLoadingPrices(false);
+      }
+    };
+
+    loadInitialTokens();
+  }, []);
+
+  // Update token addresses when chain changes
+  useEffect(() => {
+    if (currentChainId && isInitialized) {
+      const fromAddress = getTokenAddress(fromToken.symbol);
+      const toAddress = getTokenAddress(toToken.symbol);
+      
+      if (fromAddress) {
+        setFromToken(prev => ({ ...prev, address: fromAddress }));
+      }
+      if (toAddress) {
+        setToToken(prev => ({ ...prev, address: toAddress }));
+      }
+    }
+  }, [currentChainId, isInitialized, getTokenAddress, fromToken.symbol, toToken.symbol]);
+
+  // Update token prices in real-time
+  useEffect(() => {
+    const updatePrices = async () => {
+      if (fromToken.symbol && toToken.symbol) {
+        try {
+          const [fromPrice, toPrice] = await Promise.all([
+            priceFeedService.getTokenPrice(fromToken.symbol, fromToken.address),
+            priceFeedService.getTokenPrice(toToken.symbol, toToken.address)
+          ]);
+
+          if (fromPrice) {
+            setFromToken(prev => ({ ...prev, price: fromPrice.price }));
+          }
+          if (toPrice) {
+            setToToken(prev => ({ ...prev, price: toPrice.price }));
+          }
+        } catch (error) {
+          console.error('Error updating token prices:', error);
+        }
+      }
+    };
+
+    // Update prices every 30 seconds
+    const priceUpdateInterval = setInterval(updatePrices, 30000);
+    return () => clearInterval(priceUpdateInterval);
+  }, [fromToken.symbol, toToken.symbol, fromToken.address, toToken.address]);
+
+  // Update balances when wallet connects or tokens change
+  useEffect(() => {
+    const updateBalances = async () => {
+      if (!isConnected || !address) {
+        setFromBalance("0.00");
+        setToBalance("0.00");
+        return;
+      }
+
+      try {
+        // In a real implementation, you would fetch actual balances from the blockchain
+        // For now, we'll use placeholder values since we don't have contract integration yet
+        setFromBalance("0.00");
+        setToBalance("0.00");
+      } catch (error) {
+        console.error('Error fetching balances:', error);
+        setFromBalance("0.00");
+        setToBalance("0.00");
+      }
+    };
+
+    updateBalances();
+  }, [isConnected, address, fromToken.address, toToken.address]);
+
+  // Get real quote when amount or tokens change
+  useEffect(() => {
+    const getDexQuote = async () => {
+      if (!fromAmount || !isInitialized || !fromToken.address || !toToken.address || fromToken.address === "0x..." || toToken.address === "0x...") {
+        setToAmount("");
+        return;
+      }
+
+      setIsGettingQuote(true);
+      try {
+        const result = await getQuote({
+          tokenIn: fromToken.address,
+          tokenOut: toToken.address,
+          amountIn: fromAmount,
+          slippageTolerance: parseFloat(isCustomSlippage ? customSlippage : slippageTolerance)
+        });
+
+        if (result) {
+          setToAmount(result.amountOut);
+        } else {
+          // Fallback to price-based calculation when DEX quote is not available
+          if (fromToken.price > 0 && toToken.price > 0) {
+            const calculatedAmount = (Number(fromAmount) * fromToken.price) / toToken.price;
+            setToAmount(calculatedAmount.toFixed(6));
+          } else {
+            setToAmount("");
+          }
+        }
+      } catch (error) {
+        console.error('Quote error:', error);
+        setToAmount("");
+      } finally {
+        setIsGettingQuote(false);
+      }
+    };
+
+    const timeoutId = setTimeout(getDexQuote, 500); // Debounce
+    return () => clearTimeout(timeoutId);
+  }, [fromAmount, fromToken.address, toToken.address, fromToken.price, toToken.price, slippageTolerance, customSlippage, isCustomSlippage, getQuote, isInitialized]);
+
+  const calculatePriceImpact = (fromAmount: string, fromToken: Token, toToken: Token) => {
+    if (quote?.priceImpact) {
+      return quote.priceImpact;
+    }
+    // Fallback calculation based on trade size
+    if (!fromAmount || isNaN(Number(fromAmount))) return 0;
+    const tradeSize = Number(fromAmount) * fromToken.price;
+    if (tradeSize < 1000) return 0.1;
+    if (tradeSize < 10000) return 0.5;
+    if (tradeSize < 100000) return 1.2;
+    return 2.5;
   };
 
-  const handleToTokenSelect = (token: Token) => {
-    setToToken(token);
-    setIsToModalOpen(false);
+  const getMinimumReceived = (toAmount: string, slippage: string) => {
+    if (!toAmount || !slippage) return "0";
+    const minReceived = Number(toAmount) * (1 - Number(slippage) / 100);
+    return minReceived.toFixed(6);
+  };
+
+  const getPriceImpactColor = (impact: number) => {
+    if (impact < 1) return "text-green-500";
+    if (impact < 3) return "text-yellow-500";
+    return "text-red-500";
+  };
+
+  const priceImpact = calculatePriceImpact(fromAmount, fromToken, toToken);
+  const currentSlippage = isCustomSlippage ? customSlippage : slippageTolerance;
+  const minimumReceived = getMinimumReceived(toAmount, currentSlippage);
+
+  const handleFromAmountChange = (value: string) => {
+    setFromAmount(value);
   };
 
   const handleSwapTokens = () => {
     const tempToken = fromToken;
+    const tempAmount = fromAmount;
+    const tempBalance = fromBalance;
+    
     setFromToken(toToken);
     setToToken(tempToken);
     setFromAmount(toAmount);
-    setToAmount(fromAmount);
+    setToAmount(tempAmount);
+    setFromBalance(toBalance);
+    setToBalance(tempBalance);
+  };
+
+  const handleFromTokenSelect = async (token: Token) => {
+    const address = getTokenAddress(token.symbol);
+    let updatedToken = { ...token, address: address || token.address };
+    
+    // Get real-time price for the selected token
+    try {
+      const priceData = await priceFeedService.getTokenPrice(token.symbol, token.address);
+      if (priceData) {
+        updatedToken.price = priceData.price;
+      }
+    } catch (error) {
+      console.error('Error fetching token price:', error);
+    }
+    
+    setFromToken(updatedToken);
+  };
+
+  const handleToTokenSelect = async (token: Token) => {
+    const address = getTokenAddress(token.symbol);
+    let updatedToken = { ...token, address: address || token.address };
+    
+    // Get real-time price for the selected token
+    try {
+      const priceData = await priceFeedService.getTokenPrice(token.symbol, token.address);
+      if (priceData) {
+        updatedToken.price = priceData.price;
+      }
+    } catch (error) {
+      console.error('Error fetching token price:', error);
+    }
+    
+    setToToken(updatedToken);
+  };
+
+  const handleSlippageChange = (value: string) => {
+    setSlippageTolerance(value);
+    setIsCustomSlippage(false);
+    setCustomSlippage("");
+  };
+
+  const handleCustomSlippageChange = (value: string) => {
+    setCustomSlippage(value);
+    setIsCustomSlippage(true);
   };
 
   const handleSwap = async () => {
     if (!isConnected) {
       toast({
         title: "Wallet Not Connected",
-        description: "Please connect your wallet to swap tokens",
+        description: "Please connect your wallet first",
         variant: "destructive"
       });
       return;
     }
 
-    if (!fromToken || !toToken || !fromAmount) {
+    if (!isInitialized) {
       toast({
-        title: "Missing Information",
-        description: "Please select tokens and enter an amount",
+        title: "Network Not Supported",
+        description: "DEX is not available on this network",
         variant: "destructive"
       });
       return;
     }
 
-    try {
-      // Mock swap execution
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
+    if (!contractsDeployed) {
       toast({
-        title: "Swap Completed",
-        description: `Successfully swapped ${fromAmount} ${fromToken.symbol} for ${toAmount} ${toToken.symbol}`,
-      });
-
-      // Clear form
-      setFromAmount('');
-      setToAmount('');
-    } catch (error) {
-      console.error('Swap error:', error);
-      toast({
-        title: "Swap Failed",
-        description: "Transaction failed. Please try again.",
+        title: "Contracts Not Deployed",
+        description: "Deploy your DEX contracts first to enable swapping",
         variant: "destructive"
       });
+      return;
+    }
+
+    if (!fromAmount || !toAmount) {
+      toast({
+        title: "Invalid Amount",
+        description: "Please enter a valid amount to swap",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    console.log(`Swapping ${fromAmount} ${fromToken.symbol} for ${toAmount} ${toToken.symbol}`);
+    
+    const txHash = await executeSwap({
+      tokenIn: fromToken.address,
+      tokenOut: toToken.address,
+      amountIn: fromAmount,
+      slippageTolerance: parseFloat(currentSlippage)
+    });
+
+    if (txHash) {
+      // Reset form on successful swap
+      setFromAmount("");
+      setToAmount("");
     }
   };
 
-  const isSwapReady = fromToken && toToken && fromAmount && toAmount && 
-                     parseFloat(fromAmount) > 0 && parseFloat(toAmount) > 0;
+  const getSwapButtonText = () => {
+    if (!isConnected) return "Connect Wallet";
+    if (!isInitialized) return "Network Not Supported";
+    if (!contractsDeployed) return "Deploy Contracts First";
+    if (!fromAmount) return "Enter Amount";
+    if (isGettingQuote || dexLoading || isLoadingPrices) return "Loading...";
+    if (!toAmount) return "Invalid Pair";
+    if (priceImpact > 3) return "Swap Anyway";
+    return "Swap";
+  };
+
+  const isSwapDisabled = () => {
+    return !isConnected || !isInitialized || !contractsDeployed || !fromAmount || !toAmount || isGettingQuote || dexLoading || isLoadingPrices;
+  };
 
   return (
-    <Card className="max-w-lg mx-auto">
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>Swap Tokens</CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowSettings(!showSettings)}
-          >
-            <Settings className="h-4 w-4" />
-          </Button>
+    <>
+      <div className="glass-card p-6 rounded-lg mb-8 animate-fade-in">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-semibold">Swap Tokens</h2>
+          
+          {/* Settings Popover */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <Settings className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" align="end">
+              <div className="space-y-4">
+                <div>
+                  <Label className="text-sm font-medium">Slippage Tolerance</Label>
+                  <div className="flex items-center gap-2 mt-2">
+                    {["0.1", "0.5", "1.0"].map((value) => (
+                      <Button
+                        key={value}
+                        variant={slippageTolerance === value && !isCustomSlippage ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handleSlippageChange(value)}
+                        className="text-xs"
+                      >
+                        {value}%
+                      </Button>
+                    ))}
+                    <div className="flex items-center">
+                      <Input
+                        type="number"
+                        placeholder="Custom"
+                        value={customSlippage}
+                        onChange={(e) => handleCustomSlippageChange(e.target.value)}
+                        className="w-20 h-8 text-xs"
+                        step="0.1"
+                        min="0"
+                        max="50"
+                      />
+                      <span className="text-xs text-muted-foreground ml-1">%</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Higher slippage tolerance = higher chance of swap success
+                  </p>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <Alert className="mb-4">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            This is a demo mode showing mock swap functionality. In production, this would interact with deployed DEX contracts.
-          </AlertDescription>
-        </Alert>
 
-        {showSettings && (
-          <div className="p-4 border rounded-lg bg-muted/20">
-            <label className="text-sm font-medium">Slippage Tolerance (%)</label>
-            <Input
-              type="number"
-              value={slippage}
-              onChange={(e) => setSlippage(parseFloat(e.target.value) || 0)}
-              step="0.1"
-              min="0"
-              max="50"
-              className="mt-1"
-            />
+        {!contractsDeployed && isConnected && isInitialized && (
+          <div className="mb-4 p-3 bg-blue-500/10 rounded-lg flex items-center gap-2 text-blue-600">
+            <Info className="h-4 w-4" />
+            <span className="text-sm">Your DEX contracts are not deployed yet. You can test with price-based quotes.</span>
           </div>
         )}
 
-        {/* From Token */}
-        <div className="space-y-2">
-          <div className="flex justify-between">
-            <label className="text-sm font-medium">From</label>
-            {fromToken && (
-              <span className="text-sm text-muted-foreground">
-                Balance: 100.00 {fromToken.symbol}
-              </span>
-            )}
-          </div>
-          <div className="flex space-x-2">
-            <Button
-              variant="outline"
-              onClick={() => setIsFromModalOpen(true)}
-              className="min-w-[120px]"
-            >
-              {fromToken ? (
-                <div className="flex items-center space-x-2">
-                  {fromToken.logoUrl ? (
-                    <img src={fromToken.logoUrl} alt={fromToken.symbol} className="w-5 h-5 rounded-full" />
-                  ) : (
-                    <span>{fromToken.icon}</span>
-                  )}
-                  <span>{fromToken.symbol}</span>
-                </div>
-              ) : (
-                'Select Token'
-              )}
-            </Button>
-            <Input
-              type="number"
-              placeholder="0.0"
-              value={fromAmount}
-              onChange={(e) => setFromAmount(e.target.value)}
-              className="flex-1"
-            />
-          </div>
-        </div>
-
-        {/* Swap Button */}
-        <div className="flex justify-center">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleSwapTokens}
-            className="rounded-full border"
-          >
-            <ArrowUpDown className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* To Token */}
-        <div className="space-y-2">
-          <div className="flex justify-between">
-            <label className="text-sm font-medium">To</label>
-            {toToken && (
-              <span className="text-sm text-muted-foreground">
-                Balance: 50.00 {toToken.symbol}
-              </span>
-            )}
-          </div>
-          <div className="flex space-x-2">
-            <Button
-              variant="outline"
-              onClick={() => setIsToModalOpen(true)}
-              className="min-w-[120px]"
-            >
-              {toToken ? (
-                <div className="flex items-center space-x-2">
-                  {toToken.logoUrl ? (
-                    <img src={toToken.logoUrl} alt={toToken.symbol} className="w-5 h-5 rounded-full" />
-                  ) : (
-                    <span>{toToken.icon}</span>
-                  )}
-                  <span>{toToken.symbol}</span>
-                </div>
-              ) : (
-                'Select Token'
-              )}
-            </Button>
-            <Input
-              type="number"
-              placeholder="0.0"
-              value={toAmount}
-              readOnly
-              className="flex-1 bg-muted/50"
-            />
-          </div>
-        </div>
-
-        {/* Swap Details */}
-        {exchangeRate && (
-          <div className="p-4 border rounded-lg bg-muted/20 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span>Exchange Rate</span>
-              <span className="font-mono">{exchangeRate}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span>Price Impact</span>
-              <span className="font-mono text-green-600">{priceImpact}%</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span>Slippage Tolerance</span>
-              <span className="font-mono">{slippage}%</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span>Network Fee</span>
-              <span className="font-mono">~$2.50</span>
-            </div>
+        {!isInitialized && isConnected && (
+          <div className="mb-4 p-3 bg-yellow-500/10 rounded-lg flex items-center gap-2 text-yellow-600">
+            <AlertTriangle className="h-4 w-4" />
+            <span className="text-sm">DEX is not available on this network</span>
           </div>
         )}
 
-        <Button
-          onClick={handleSwap}
-          disabled={!isConnected || !isSwapReady || isLoading}
-          className="w-full"
-          size="lg"
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Swapping...
-            </>
-          ) : !isConnected ? (
-            'Connect Wallet'
-          ) : !isSwapReady ? (
-            'Enter an amount'
-          ) : (
-            `Swap ${fromToken?.symbol} for ${toToken?.symbol}`
+        <div className="space-y-4">
+          {/* From Token */}
+          <Card className="bg-secondary/20 border-muted/20">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-muted-foreground">From</span>
+                <span className="text-sm text-muted-foreground">
+                  Balance: {fromBalance} {fromToken.symbol}
+                </span>
+              </div>
+              <div className="flex items-center space-x-3">
+                <Input
+                  type="number"
+                  placeholder="0.0"
+                  value={fromAmount}
+                  onChange={(e) => handleFromAmountChange(e.target.value)}
+                  className="text-lg font-semibold bg-transparent border-none p-0 h-auto"
+                  disabled={!isConnected || !isInitialized || isLoadingPrices}
+                />
+                <Button
+                  variant="ghost"
+                  onClick={() => setIsFromTokenModalOpen(true)}
+                  className="flex items-center space-x-2 bg-muted/20 hover:bg-muted/30 px-3 py-2 rounded-lg"
+                  disabled={isLoadingPrices}
+                >
+                  <span className="text-lg">{fromToken.icon || "🔵"}</span>
+                  <span className="font-medium">{fromToken.symbol}</span>
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </div>
+              {fromAmount && fromToken.price > 0 && (
+                <div className="text-sm text-muted-foreground mt-1">
+                  ≈ ${(Number(fromAmount) * fromToken.price).toLocaleString()}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Swap Button */}
+          <div className="flex justify-center">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleSwapTokens}
+              className="rounded-full bg-muted/20 hover:bg-muted/30"
+              disabled={!isConnected || !isInitialized || isLoadingPrices}
+            >
+              <ArrowDown className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* To Token */}
+          <Card className="bg-secondary/20 border-muted/20">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-muted-foreground">To</span>
+                <span className="text-sm text-muted-foreground">
+                  Balance: {toBalance} {toToken.symbol}
+                </span>
+              </div>
+              <div className="flex items-center space-x-3">
+                <div className="flex items-center flex-1">
+                  <Input
+                    type="number"
+                    placeholder="0.0"
+                    value={toAmount}
+                    readOnly
+                    className="text-lg font-semibold bg-transparent border-none p-0 h-auto"
+                  />
+                  {(isGettingQuote || isLoadingPrices) && (
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground ml-2" />
+                  )}
+                </div>
+                <Button
+                  variant="ghost"
+                  onClick={() => setIsToTokenModalOpen(true)}
+                  className="flex items-center space-x-2 bg-muted/20 hover:bg-muted/30 px-3 py-2 rounded-lg"
+                  disabled={isLoadingPrices}
+                >
+                  <span className="text-lg">{toToken.icon || "🔵"}</span>
+                  <span className="font-medium">{toToken.symbol}</span>
+                  <ChevronDown className="h-4 w-4" />
+                </Button>
+              </div>
+              {toAmount && toToken.price > 0 && (
+                <div className="text-sm text-muted-foreground mt-1">
+                  ≈ ${(Number(toAmount) * toToken.price).toLocaleString()}
+                  {!contractsDeployed && <span className="ml-2 text-blue-500">(Price-based)</span>}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Swap Details */}
+          {fromAmount && toAmount && isConnected && isInitialized && !isLoadingPrices && (
+            <div className="bg-muted/10 rounded-lg p-3 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Rate</span>
+                <span>1 {fromToken.symbol} = {toAmount && fromAmount ? (Number(toAmount) / Number(fromAmount)).toFixed(6) : "0"} {toToken.symbol}</span>
+              </div>
+              
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Network Fee</span>
+                <span>{quote?.gasEstimate ? `~$${(parseInt(quote.gasEstimate) * 0.000000001 * 2000).toFixed(2)}` : "~$2.50"}</span>
+              </div>
+              
+              <div className="flex justify-between">
+                <div className="flex items-center gap-1">
+                  <span className="text-muted-foreground">Price Impact</span>
+                  <Info className="h-3 w-3 text-muted-foreground" />
+                </div>
+                <span className={getPriceImpactColor(priceImpact)}>
+                  {priceImpact.toFixed(2)}%
+                </span>
+              </div>
+
+              <div className="flex justify-between">
+                <div className="flex items-center gap-1">
+                  <span className="text-muted-foreground">Min. Received</span>
+                  <Info className="h-3 w-3 text-muted-foreground" />
+                </div>
+                <span>
+                  {minimumReceived} {toToken.symbol}
+                </span>
+              </div>
+
+              <div className="flex justify-between">
+                <div className="flex items-center gap-1">
+                  <span className="text-muted-foreground">Slippage Tolerance</span>
+                </div>
+                <span>
+                  {currentSlippage}%
+                </span>
+              </div>
+              
+              {priceImpact > 3 && (
+                <div className="mt-2 p-2 bg-red-500/10 rounded-md flex items-start gap-2 text-xs text-red-500">
+                  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                  <span>
+                    Price impact is very high. You may receive significantly less tokens than expected.
+                  </span>
+                </div>
+              )}
+            </div>
           )}
-        </Button>
 
-        {/* Token Selector Modals */}
-        <TokenSelectorModal
-          open={isFromModalOpen}
-          onOpenChange={setIsFromModalOpen}
-          onSelectToken={handleFromTokenSelect}
-          selectedToken={toToken?.address}
-        />
-        
-        <TokenSelectorModal
-          open={isToModalOpen}
-          onOpenChange={setIsToModalOpen}
-          onSelectToken={handleToTokenSelect}
-          selectedToken={fromToken?.address}
-        />
-      </CardContent>
-    </Card>
+          {/* Swap Button */}
+          <Button 
+            className="w-full" 
+            onClick={handleSwap}
+            disabled={isSwapDisabled()}
+            variant={priceImpact > 3 ? "destructive" : "default"}
+          >
+            {(dexLoading || isLoadingPrices) && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            {getSwapButtonText()}
+          </Button>
+        </div>
+      </div>
+
+      {/* Token Selector Modals */}
+      <TokenSelectorModal
+        open={isFromTokenModalOpen}
+        onOpenChange={setIsFromTokenModalOpen}
+        onSelectToken={handleFromTokenSelect}
+        selectedToken={fromToken.symbol}
+      />
+      
+      <TokenSelectorModal
+        open={isToTokenModalOpen}
+        onOpenChange={setIsToTokenModalOpen}
+        onSelectToken={handleToTokenSelect}
+        selectedToken={toToken.symbol}
+      />
+    </>
   );
 };
 
