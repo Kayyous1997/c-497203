@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import CryptoMiniChart from "./CryptoMiniChart";
 import CryptoFilters from "./CryptoFilters";
+import { cryptoSearchService } from "@/services/cryptoSearchService";
 
 const fetchCryptoData = async () => {
   const response = await fetch('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1&sparkline=true&price_change_percentage=1h%2C24h%2C7d');
@@ -22,12 +23,30 @@ const CryptoList = () => {
   const [activeFilter, setActiveFilter] = useState('all');
   const [showWatchlistOnly, setShowWatchlistOnly] = useState(false);
   const [watchlist, setWatchlist] = useState<Set<string>>(new Set());
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   const { data: cryptos, isLoading } = useQuery({
     queryKey: ['cryptos'],
     queryFn: fetchCryptoData,
     refetchInterval: 30000,
   });
+
+  // Query for detailed search results
+  const { data: searchDetailsData, isLoading: isLoadingSearchDetails } = useQuery({
+    queryKey: ['searchDetails', searchResults.map(r => r.id).join(',')],
+    queryFn: () => {
+      if (searchResults.length === 0) return [];
+      return cryptoSearchService.getDetailedCryptoData(searchResults.map(r => r.id));
+    },
+    enabled: searchResults.length > 0 && searchTerm.length >= 2,
+    staleTime: 300000, // 5 minutes
+  });
+
+  const handleSearchResults = (results: any[]) => {
+    setSearchResults(results);
+    setIsSearching(results.length > 0 && searchTerm.length >= 2);
+  };
 
   const handleSort = (column: typeof sortBy) => {
     if (sortBy === column) {
@@ -48,11 +67,18 @@ const CryptoList = () => {
     setWatchlist(newWatchlist);
   };
 
-  const filteredCryptos = cryptos?.filter((crypto) => {
-    // Search filter
-    if (searchTerm && !crypto.name.toLowerCase().includes(searchTerm.toLowerCase()) && 
-        !crypto.symbol.toLowerCase().includes(searchTerm.toLowerCase())) {
-      return false;
+  // Use search results when searching, otherwise use default crypto data
+  const dataToFilter = isSearching && searchDetailsData ? searchDetailsData : cryptos;
+  const isLoadingData = isSearching ? isLoadingSearchDetails : isLoading;
+
+  const filteredCryptos = dataToFilter?.filter((crypto) => {
+    // For search results, we don't need to filter by search term again
+    if (!isSearching) {
+      // Search filter for default data
+      if (searchTerm && !crypto.name.toLowerCase().includes(searchTerm.toLowerCase()) && 
+          !crypto.symbol.toLowerCase().includes(searchTerm.toLowerCase())) {
+        return false;
+      }
     }
 
     // Watchlist filter
@@ -116,7 +142,7 @@ const CryptoList = () => {
     return null;
   };
 
-  if (isLoading) {
+  if (isLoadingData) {
     return (
       <div className="glass-card rounded-lg p-6 animate-pulse">
         <div className="h-6 bg-muted rounded w-48 mb-6"></div>
@@ -142,15 +168,17 @@ const CryptoList = () => {
     <div className="glass-card rounded-lg p-6 animate-fade-in">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-xl font-semibold">Top Cryptocurrencies</h2>
+          <h2 className="text-xl font-semibold">
+            {isSearching ? 'Search Results' : 'Top Cryptocurrencies'}
+          </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {filteredCryptos?.length || 0} currencies • Real-time data
+            {filteredCryptos?.length || 0} currencies • {isSearching ? 'Search results' : 'Real-time data'}
           </p>
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-xs">
             <TrendingUpIcon className="w-3 h-3 mr-1" />
-            Live Data
+            {isSearching ? 'Search Mode' : 'Live Data'}
           </Badge>
           <Button
             variant="outline"
@@ -170,7 +198,17 @@ const CryptoList = () => {
         onFilterChange={setActiveFilter}
         showWatchlistOnly={showWatchlistOnly}
         onWatchlistToggle={() => setShowWatchlistOnly(!showWatchlistOnly)}
+        onSearchResults={handleSearchResults}
+        isSearching={isLoadingSearchDetails}
       />
+
+      {/* Show a message when searching but no results */}
+      {isSearching && searchTerm.length >= 2 && filteredCryptos?.length === 0 && !isLoadingSearchDetails && (
+        <div className="text-center py-8 text-muted-foreground">
+          <p>No results found for "{searchTerm}"</p>
+          <p className="text-sm mt-2">Try searching for a different cryptocurrency name or symbol</p>
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         <Table>
@@ -338,7 +376,10 @@ const CryptoList = () => {
       </div>
 
       <div className="mt-4 text-xs text-muted-foreground text-center">
-        Data updates every 30 seconds • Powered by CoinGecko API
+        {isSearching ? 
+          'Search powered by CoinGecko API' : 
+          'Data updates every 30 seconds • Powered by CoinGecko API'
+        }
       </div>
     </div>
   );
