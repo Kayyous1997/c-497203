@@ -1,7 +1,5 @@
 
 import { ethers } from 'ethers';
-import { AlphaRouter } from '@uniswap/smart-order-router';
-import { ChainId } from '@uniswap/sdk-core';
 
 interface UniswapTokenPrice {
   symbol: string;
@@ -18,17 +16,10 @@ class UniswapPriceService {
   private priceCache: Map<string, UniswapTokenPrice> = new Map();
   private logoCache: Map<string, string> = new Map();
   private readonly CACHE_TTL = 30000; // 30 seconds for better performance
-  private alphaRouter: AlphaRouter | null = null;
 
   async initialize(provider: ethers.providers.Provider, chainId: number) {
-    try {
-      this.alphaRouter = new AlphaRouter({
-        chainId,
-        provider: provider as any
-      });
-    } catch (error) {
-      console.warn('Failed to initialize AlphaRouter:', error);
-    }
+    // Simplified initialization without AlphaRouter to avoid JSBI issues
+    console.log('Uniswap price service initialized for chain:', chainId);
   }
 
   async getTokenPrice(symbol: string, address?: string, chainId: number = 1): Promise<UniswapTokenPrice | null> {
@@ -40,24 +31,41 @@ class UniswapPriceService {
     }
 
     try {
-      // Try Uniswap first
-      const uniswapPrice = await this.fetchFromUniswap(symbol, address, chainId);
-      if (uniswapPrice) {
-        this.priceCache.set(cacheKey, uniswapPrice);
-        return uniswapPrice;
-      }
-
-      // Fallback to CoinGecko for price data
+      // Try Uniswap token list first for metadata
+      const tokenMetadata = await this.fetchTokenMetadata(symbol, address, chainId);
+      
+      // Fallback to CoinGecko for reliable price data
       const coinGeckoPrice = await this.fetchFromCoinGecko(symbol);
+      
       if (coinGeckoPrice) {
         // Enhance with Uniswap logo if available
         const logoUrl = await this.getUniswapLogo(address, chainId);
         if (logoUrl) {
           coinGeckoPrice.logoUrl = logoUrl;
+        } else if (tokenMetadata?.logoURI) {
+          coinGeckoPrice.logoUrl = tokenMetadata.logoURI;
         }
         
         this.priceCache.set(cacheKey, coinGeckoPrice);
         return coinGeckoPrice;
+      }
+
+      // If CoinGecko fails, use mock data with token metadata
+      if (tokenMetadata) {
+        const mockPrice = this.getMockPriceForToken(symbol);
+        const result = {
+          symbol: tokenMetadata.symbol || symbol.toUpperCase(),
+          address: tokenMetadata.address || address || '',
+          price: mockPrice.price,
+          priceChange24h: mockPrice.change,
+          volume24h: mockPrice.volume,
+          marketCap: mockPrice.marketCap,
+          lastUpdated: Date.now(),
+          logoUrl: tokenMetadata.logoURI
+        };
+        
+        this.priceCache.set(cacheKey, result);
+        return result;
       }
 
       return null;
@@ -92,11 +100,8 @@ class UniswapPriceService {
     return finalUrl;
   }
 
-  private async fetchFromUniswap(symbol: string, address?: string, chainId: number = 1): Promise<UniswapTokenPrice | null> {
+  private async fetchTokenMetadata(symbol: string, address?: string, chainId: number = 1): Promise<any> {
     try {
-      if (!this.alphaRouter || !address) return null;
-
-      // Get token info from Uniswap token lists
       const tokenListUrl = this.getUniswapTokenListUrl(chainId);
       if (!tokenListUrl) return null;
 
@@ -105,26 +110,11 @@ class UniswapPriceService {
 
       const tokenList = await response.json();
       const token = tokenList.tokens?.find((t: any) => 
-        t.address.toLowerCase() === address.toLowerCase() ||
+        (address && t.address.toLowerCase() === address.toLowerCase()) ||
         t.symbol.toLowerCase() === symbol.toLowerCase()
       );
 
-      if (!token) return null;
-
-      // For now, we'll use a simple price estimation
-      // In a real implementation, you'd use the AlphaRouter to get accurate pricing
-      const mockPrice = this.getMockPriceForToken(symbol);
-
-      return {
-        symbol: token.symbol,
-        address: token.address,
-        price: mockPrice.price,
-        priceChange24h: mockPrice.change,
-        volume24h: mockPrice.volume,
-        marketCap: mockPrice.marketCap,
-        lastUpdated: Date.now(),
-        logoUrl: token.logoURI
-      };
+      return token;
     } catch (error) {
       return null;
     }
@@ -160,12 +150,6 @@ class UniswapPriceService {
   private async getUniswapLogo(address?: string, chainId: number = 1): Promise<string | null> {
     try {
       if (!address) return null;
-
-      const logoUrl = `https://raw.githubusercontent.com/Uniswap/assets/master/blockchains/ethereum/assets/${address}/logo.png`;
-      
-      if (await this.isImageValid(logoUrl)) {
-        return logoUrl;
-      }
 
       // Try Uniswap token list
       const tokenListUrl = this.getUniswapTokenListUrl(chainId);
@@ -226,9 +210,10 @@ class UniswapPriceService {
   }
 
   private getMockPriceForToken(symbol: string): { price: number; change: number; volume: number; marketCap: number } {
-    // Mock prices for development - replace with real Uniswap pricing
+    // Mock prices for development - replace with real pricing when needed
     const mockPrices: Record<string, any> = {
       'ETH': { price: 2000, change: 2.5, volume: 1000000, marketCap: 240000000000 },
+      'WETH': { price: 2000, change: 2.5, volume: 1000000, marketCap: 240000000000 },
       'USDC': { price: 1.0, change: 0.1, volume: 2000000, marketCap: 25000000000 },
       'USDT': { price: 1.0, change: -0.05, volume: 3000000, marketCap: 83000000000 },
       'UNI': { price: 6.5, change: 1.8, volume: 150000, marketCap: 4900000000 },
@@ -242,6 +227,7 @@ class UniswapPriceService {
     const coinMap: Record<string, string> = {
       'BTC': 'bitcoin',
       'ETH': 'ethereum',
+      'WETH': 'ethereum',
       'USDC': 'usd-coin',
       'USDT': 'tether',
       'DAI': 'dai',

@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -148,38 +147,16 @@ const TokenSelectorModal = ({ open, onOpenChange, onSelectToken, selectedToken }
     return () => clearTimeout(timeoutId);
   }, [searchQuery, popularTokens, chain?.id]);
 
-  const generateMockSearchResults = async (query: string): Promise<Token[]> => {
-    // Mock search results based on query
+  const generateMockSearchResults = async (searchQuery: string): Promise<Token[]> => {
+    // Simulate search delay
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
     const mockTokens = [
-      { symbol: 'WETH', name: 'Wrapped Ethereum', address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2' },
-      { symbol: 'DAI', name: 'Dai Stablecoin', address: '0x6B175474E89094C44Da98b954EedeAC495271d0F' },
-      { symbol: 'WBTC', name: 'Wrapped Bitcoin', address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599' }
+      { symbol: searchQuery.toUpperCase(), name: `${searchQuery} Token`, address: '0x...', icon: '🔵', price: 1.0 },
+      { symbol: `W${searchQuery.toUpperCase()}`, name: `Wrapped ${searchQuery}`, address: '0x...', icon: '🔷', price: 1.0 }
     ];
-
-    const results: Token[] = [];
-    for (const mockToken of mockTokens) {
-      if (mockToken.symbol.toLowerCase().includes(query.toLowerCase()) ||
-          mockToken.name.toLowerCase().includes(query.toLowerCase())) {
-        
-        const priceData = await uniswapPriceService.getTokenPrice(
-          mockToken.symbol, 
-          mockToken.address, 
-          chain?.id || 1
-        );
-
-        results.push({
-          symbol: mockToken.symbol,
-          name: mockToken.name,
-          address: mockToken.address,
-          icon: "❓",
-          price: priceData?.price || 0,
-          volume24h: priceData?.volume24h || 0,
-          logoUrl: priceData?.logoUrl
-        });
-      }
-    }
-
-    return results;
+    
+    return mockTokens;
   };
 
   const handleTokenSelect = (token: Token) => {
