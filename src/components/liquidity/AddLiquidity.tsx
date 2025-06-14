@@ -3,13 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Plus, Settings, Loader2, AlertTriangle, CheckCircle, PlusCircle, Info } from 'lucide-react';
+import { Plus, Settings, Loader2, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { useAccount, useChainId } from 'wagmi';
 import { useDex } from '@/hooks/useUniswap';
 import { useLiquidity } from '@/hooks/useLiquidity';
 import { useToast } from '@/hooks/use-toast';
 import TokenSelectorModal from '@/components/TokenSelectorModal';
-import NewTokenCreator from './NewTokenCreator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 // Use the same Token interface as TokenSelectorModal expects
@@ -22,14 +21,6 @@ interface Token {
   volume24h?: number;
   logoUrl?: string;
   logoSource?: string;
-}
-
-interface NewTokenData {
-  name: string;
-  symbol: string;
-  decimals: number;
-  totalSupply: string;
-  description?: string;
 }
 
 const AddLiquidity = () => {
@@ -49,14 +40,15 @@ const AddLiquidity = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [priceRatio, setPriceRatio] = useState<string>('');
   const [shareOfPool, setShareOfPool] = useState<string>('');
-  const [step, setStep] = useState<'input' | 'approve' | 'confirm' | 'pending' | 'success' | 'create-token'>('input');
+  const [step, setStep] = useState<'input' | 'approve' | 'confirm' | 'pending' | 'success'>('input');
   const [approvalA, setApprovalA] = useState(false);
   const [approvalB, setApprovalB] = useState(false);
-  const [showNewTokenCreator, setShowNewTokenCreator] = useState(false);
-  const [tokenCreationType, setTokenCreationType] = useState<'A' | 'B' | null>(null);
   const [isNewPair, setIsNewPair] = useState(false);
   const [pairExists, setPairExists] = useState<boolean | null>(null);
   const [isSettingInitialPrice, setIsSettingInitialPrice] = useState(false);
+  const [customTokenAddress, setCustomTokenAddress] = useState('');
+  const [showCustomTokenInput, setShowCustomTokenInput] = useState<'A' | 'B' | null>(null);
+  const [isValidatingToken, setIsValidatingToken] = useState(false);
 
   // Check if pair exists when both tokens are selected
   useEffect(() => {
@@ -111,6 +103,60 @@ const AddLiquidity = () => {
     }
   }, [amountA, amountB, isNewPair]);
 
+  const validateTokenContract = async (address: string): Promise<Token | null> => {
+    setIsValidatingToken(true);
+    try {
+      // Simulate contract validation - in real implementation, you'd call contract methods
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Mock validation - in reality, you'd check if it's a valid ERC-20 contract
+      if (!address.startsWith('0x') || address.length !== 42) {
+        throw new Error('Invalid contract address format');
+      }
+
+      // Mock token data - in reality, you'd fetch from the contract
+      const mockToken: Token = {
+        symbol: `TOKEN_${address.slice(-4).toUpperCase()}`,
+        name: `Custom Token ${address.slice(-4)}`,
+        address,
+        icon: '🪙',
+        price: 0,
+        logoUrl: undefined
+      };
+
+      toast({
+        title: "Token Validated",
+        description: `Found token: ${mockToken.symbol}`,
+      });
+
+      return mockToken;
+    } catch (error) {
+      toast({
+        title: "Invalid Token",
+        description: "Please enter a valid ERC-20 token contract address",
+        variant: "destructive"
+      });
+      return null;
+    } finally {
+      setIsValidatingToken(false);
+    }
+  };
+
+  const handleCustomTokenSubmit = async (tokenType: 'A' | 'B') => {
+    if (!customTokenAddress) return;
+
+    const token = await validateTokenContract(customTokenAddress);
+    if (token) {
+      if (tokenType === 'A') {
+        setTokenA(token);
+      } else {
+        setTokenB(token);
+      }
+      setCustomTokenAddress('');
+      setShowCustomTokenInput(null);
+    }
+  };
+
   const handleTokenASelect = (token: Token) => {
     setTokenA(token);
     setIsTokenAModalOpen(false);
@@ -129,49 +175,6 @@ const AddLiquidity = () => {
     if (isSettingInitialPrice) {
       setAmountA('');
     }
-  };
-
-  const handleNewTokenAClick = () => {
-    setTokenCreationType('A');
-    setShowNewTokenCreator(true);
-    setIsTokenAModalOpen(false);
-  };
-
-  const handleNewTokenBClick = () => {
-    setTokenCreationType('B');
-    setShowNewTokenCreator(true);
-    setIsTokenBModalOpen(false);
-  };
-
-  const handleTokenCreated = (tokenAddress: string, tokenData: NewTokenData) => {
-    const newToken: Token = {
-      symbol: tokenData.symbol,
-      name: tokenData.name,
-      address: tokenAddress,
-      icon: '🪙',
-      price: 0,
-      logoUrl: undefined
-    };
-
-    if (tokenCreationType === 'A') {
-      setTokenA(newToken);
-    } else if (tokenCreationType === 'B') {
-      setTokenB(newToken);
-    }
-
-    setShowNewTokenCreator(false);
-    setTokenCreationType(null);
-    setStep('input');
-    
-    toast({
-      title: "Token Created",
-      description: `${tokenData.symbol} token created successfully. You can now add initial liquidity.`,
-    });
-  };
-
-  const handleCancelTokenCreation = () => {
-    setShowNewTokenCreator(false);
-    setTokenCreationType(null);
   };
 
   const handleAmountAChange = (value: string) => {
@@ -311,16 +314,6 @@ const AddLiquidity = () => {
   const isFormValid = tokenA && tokenB && amountA && amountB && 
                      parseFloat(amountA) > 0 && parseFloat(amountB) > 0;
 
-  // Show new token creator if requested
-  if (showNewTokenCreator) {
-    return (
-      <NewTokenCreator
-        onTokenCreated={handleTokenCreated}
-        onCancel={handleCancelTokenCreation}
-      />
-    );
-  }
-
   const getStepContent = () => {
     switch (step) {
       case 'input':
@@ -392,15 +385,47 @@ const AddLiquidity = () => {
                   className="flex-1"
                 />
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleNewTokenAClick}
-                className="w-full text-xs"
-              >
-                <PlusCircle className="mr-1 h-3 w-3" />
-                Create New Token A
-              </Button>
+              
+              {/* Custom Token Input for A */}
+              {showCustomTokenInput === 'A' ? (
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Enter token contract address (0x...)"
+                    value={customTokenAddress}
+                    onChange={(e) => setCustomTokenAddress(e.target.value)}
+                  />
+                  <div className="flex space-x-2">
+                    <Button
+                      size="sm"
+                      onClick={() => handleCustomTokenSubmit('A')}
+                      disabled={!customTokenAddress || isValidatingToken}
+                      className="flex-1"
+                    >
+                      {isValidatingToken ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add Token'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowCustomTokenInput(null);
+                        setCustomTokenAddress('');
+                      }}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowCustomTokenInput('A')}
+                  className="w-full text-xs"
+                >
+                  + Add Custom Token Contract
+                </Button>
+              )}
             </div>
 
             <div className="flex justify-center">
@@ -437,15 +462,47 @@ const AddLiquidity = () => {
                   className="flex-1"
                 />
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleNewTokenBClick}
-                className="w-full text-xs"
-              >
-                <PlusCircle className="mr-1 h-3 w-3" />
-                Create New Token B
-              </Button>
+              
+              {/* Custom Token Input for B */}
+              {showCustomTokenInput === 'B' ? (
+                <div className="space-y-2">
+                  <Input
+                    placeholder="Enter token contract address (0x...)"
+                    value={customTokenAddress}
+                    onChange={(e) => setCustomTokenAddress(e.target.value)}
+                  />
+                  <div className="flex space-x-2">
+                    <Button
+                      size="sm"
+                      onClick={() => handleCustomTokenSubmit('B')}
+                      disabled={!customTokenAddress || isValidatingToken}
+                      className="flex-1"
+                    >
+                      {isValidatingToken ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Add Token'}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setShowCustomTokenInput(null);
+                        setCustomTokenAddress('');
+                      }}
+                      className="flex-1"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowCustomTokenInput('B')}
+                  className="w-full text-xs"
+                >
+                  + Add Custom Token Contract
+                </Button>
+              )}
             </div>
 
             {/* Price and Pool Info */}
