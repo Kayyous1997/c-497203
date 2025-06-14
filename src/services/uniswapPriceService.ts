@@ -1,7 +1,7 @@
 
 import { ethers } from 'ethers';
-import { ChainId, Token, Fetcher, Route, Trade, TradeType, Percent } from '@uniswap/sdk-core';
 import { AlphaRouter } from '@uniswap/smart-order-router';
+import { ChainId } from '@uniswap/sdk-core';
 
 interface UniswapTokenPrice {
   symbol: string;
@@ -24,7 +24,7 @@ class UniswapPriceService {
     try {
       this.alphaRouter = new AlphaRouter({
         chainId,
-        provider
+        provider: provider as any
       });
     } catch (error) {
       console.warn('Failed to initialize AlphaRouter:', error);

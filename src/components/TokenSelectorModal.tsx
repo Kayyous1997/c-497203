@@ -47,7 +47,8 @@ const TokenSelectorModal = ({ open, onOpenChange, onSelectToken, selectedToken }
   // Load popular tokens using Uniswap service
   useEffect(() => {
     const loadPopularTokens = async () => {
-      if (!chain?.id) return;
+      const chainId = chain?.id;
+      if (!chainId) return;
       
       setIsLoadingPopular(true);
       try {
@@ -68,7 +69,7 @@ const TokenSelectorModal = ({ open, onOpenChange, onSelectToken, selectedToken }
             const priceData = await uniswapPriceService.getTokenPrice(
               tokenData.symbol, 
               tokenData.address, 
-              chain.id
+              chainId
             );
             
             const token: Token = {
@@ -85,7 +86,7 @@ const TokenSelectorModal = ({ open, onOpenChange, onSelectToken, selectedToken }
 
             // Load logo asynchronously
             logoPromises.push(
-              uniswapPriceService.getTokenLogo(token.address, chain.id, token.symbol).then((logoUrl) => {
+              uniswapPriceService.getTokenLogo(token.address, chainId, token.symbol).then((logoUrl) => {
                 setTokenLogos(prev => new Map(prev.set(token.address, logoUrl)));
               })
             );
@@ -129,7 +130,7 @@ const TokenSelectorModal = ({ open, onOpenChange, onSelectToken, selectedToken }
 
         // Add some mock search results for demonstration
         if (filteredTokens.length === 0 && searchQuery.length >= 3) {
-          const mockResults = await this.generateMockSearchResults(searchQuery);
+          const mockResults = await generateMockSearchResults(searchQuery);
           setSearchResults(mockResults);
         } else {
           setSearchResults(filteredTokens);
