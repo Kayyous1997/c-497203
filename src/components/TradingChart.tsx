@@ -3,9 +3,9 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { TrendingUp, TrendingDown } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, BarChart, Bar } from 'recharts';
-import { priceFeedService, CandlestickData, PriceHistory } from '@/services/priceFeedService';
+import { Input } from '@/components/ui/input';
+import { TrendingUp, TrendingDown, Search, RefreshCw, ExternalLink } from 'lucide-react';
+import { useDexScreener } from '@/hooks/useDexScreener';
 
 interface TradingChartProps {
   symbol: string;
@@ -13,55 +13,49 @@ interface TradingChartProps {
 }
 
 const TradingChart: React.FC<TradingChartProps> = ({ symbol, address }) => {
-  const [chartData, setChartData] = useState<PriceHistory[]>([]);
-  const [candleData, setCandleData] = useState<CandlestickData[]>([]);
-  const [chartType, setChartType] = useState<'line' | 'candle'>('line');
-  const [timeframe, setTimeframe] = useState<number>(7);
-  const [loading, setLoading] = useState(true);
-  const [currentPrice, setCurrentPrice] = useState<number>(0);
-  const [priceChange, setPriceChange] = useState<number>(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showPairsList, setShowPairsList] = useState(false);
+  
+  const {
+    pairs,
+    selectedPair,
+    isLoading,
+    error,
+    searchToken,
+    selectPair,
+    refreshPairData,
+    dexScreenerService
+  } = useDexScreener();
 
+  // Initialize with the provided symbol
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // Get current price
-        const price = await priceFeedService.getTokenPrice(symbol, address);
-        if (price) {
-          setCurrentPrice(price.price);
-          setPriceChange(price.priceChange24h);
-        }
-
-        // Get chart data
-        if (chartType === 'line') {
-          const history = await priceFeedService.getPriceHistory(symbol, timeframe);
-          setChartData(history.map(h => ({
-            ...h,
-            date: new Date(h.timestamp).toLocaleDateString(),
-            time: new Date(h.timestamp).toLocaleTimeString()
-          })));
-        } else {
-          const candles = await priceFeedService.getCandlestickData(symbol, timeframe);
-          setCandleData(candles.map(c => ({
-            ...c,
-            date: new Date(c.timestamp).toLocaleDateString()
-          })));
-        }
-      } catch (error) {
-        console.error('Error fetching chart data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [symbol, address, chartType, timeframe]);
-
-  const formatPrice = (price: number) => {
-    if (price >= 1) {
-      return `$${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 })}`;
+    if (symbol) {
+      searchToken(symbol);
     }
-    return `$${price.toFixed(8)}`;
+  }, [symbol, searchToken]);
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      searchToken(searchQuery.trim());
+      setShowPairsList(true);
+    }
+  };
+
+  const handlePairSelect = (pair: any) => {
+    selectPair(pair);
+    setShowPairsList(false);
+    setSearchQuery('');
+  };
+
+  const getPriceChangeColor = (change: number) => {
+    if (change > 0) return 'text-green-500';
+    if (change < 0) return 'text-red-500';
+    return 'text-muted-foreground';
+  };
+
+  const getPriceChangeIcon = (change: number) => {
+    return change >= 0 ? TrendingUp : TrendingDown;
   };
 
   if (loading) {
@@ -83,108 +77,167 @@ const TradingChart: React.FC<TradingChartProps> = ({ symbol, address }) => {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
-              {symbol.toUpperCase()} Price Chart
-              <Badge variant={priceChange >= 0 ? "default" : "destructive"}>
-                {priceChange >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                {Math.abs(priceChange).toFixed(2)}%
-              </Badge>
+              {selectedPair ? (
+                <>
+                  {selectedPair.baseToken.symbol}/{selectedPair.quoteToken.symbol} Chart
+                  <Badge variant={selectedPair.priceChange.h24 >= 0 ? "default" : "destructive"}>
+                    {selectedPair.priceChange.h24 >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                    {Math.abs(selectedPair.priceChange.h24).toFixed(2)}%
+                  </Badge>
+                </>
+              ) : (
+                `${symbol.toUpperCase()} Trading Chart`
+              )}
             </CardTitle>
-            <p className="text-2xl font-bold">{formatPrice(currentPrice)}</p>
+            {selectedPair && (
+              <p className="text-2xl font-bold">
+                ${dexScreenerService.formatPrice(selectedPair.priceUsd)}
+              </p>
+            )}
           </div>
           
-          <div className="flex gap-2">
-            <Button
-              variant={chartType === 'line' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setChartType('line')}
-            >
-              Line
-            </Button>
-            <Button
-              variant={chartType === 'candle' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setChartType('candle')}
-            >
-              Candle
-            </Button>
+          <div className="flex items-center gap-2">
+            <form onSubmit={handleSearch} className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="text"
+                  placeholder="Search token..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 w-48"
+                />
+              </div>
+              <Button type="submit" size="sm" disabled={isLoading}>
+                {isLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : 'Search'}
+              </Button>
+            </form>
+            
+            {selectedPair && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={refreshPairData}
+                disabled={isLoading}
+              >
+                <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+              </Button>
+            )}
           </div>
-        </div>
-        
-        <div className="flex gap-2">
-          {[1, 7, 30, 90].map((days) => (
-            <Button
-              key={days}
-              variant={timeframe === days ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setTimeframe(days)}
-            >
-              {days}D
-            </Button>
-          ))}
         </div>
       </CardHeader>
       
       <CardContent>
-        <div className="w-full h-96">
-          <ResponsiveContainer width="100%" height="100%">
-            {chartType === 'line' ? (
-              <LineChart data={chartData}>
-                <XAxis 
-                  dataKey="date" 
-                  stroke="#E6E4DD"
-                  fontSize={12}
-                />
-                <YAxis 
-                  stroke="#E6E4DD"
-                  fontSize={12}
-                  tickFormatter={(value) => formatPrice(value)}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    background: '#3A3935',
-                    border: '1px solid #605F5B',
-                    borderRadius: '8px'
-                  }}
-                  labelStyle={{ color: '#E6E4DD' }}
-                  formatter={(value: number) => [formatPrice(value), 'Price']}
-                />
-                <Line 
-                  type="monotone" 
-                  dataKey="price" 
-                  stroke="#8989DE" 
-                  strokeWidth={2}
-                  dot={false}
-                />
-              </LineChart>
-            ) : (
-              <BarChart data={candleData}>
-                <XAxis 
-                  dataKey="date" 
-                  stroke="#E6E4DD"
-                  fontSize={12}
-                />
-                <YAxis 
-                  stroke="#E6E4DD"
-                  fontSize={12}
-                  tickFormatter={(value) => formatPrice(value)}
-                />
-                <Tooltip 
-                  contentStyle={{ 
-                    background: '#3A3935',
-                    border: '1px solid #605F5B',
-                    borderRadius: '8px'
-                  }}
-                  labelStyle={{ color: '#E6E4DD' }}
-                  formatter={(value: number, name: string) => [formatPrice(value), name]}
-                />
-                <Bar dataKey="open" fill="#8884d8" name="Open" />
-                <Bar dataKey="close" fill="#82ca9d" name="Close" />
-                <Bar dataKey="high" fill="#ffc658" name="High" />
-                <Bar dataKey="low" fill="#ff7300" name="Low" />
-              </BarChart>
-            )}
-          </ResponsiveContainer>
-        </div>
+        {error && (
+          <div className="mb-4 p-3 bg-red-500/10 rounded-lg text-red-600 text-sm">
+            {error}
+          </div>
+        )}
+
+        {/* Pairs Selection */}
+        {showPairsList && pairs.length > 0 && (
+          <div className="mb-6">
+            <h4 className="text-lg font-medium mb-3">Select Trading Pair</h4>
+            <div className="grid gap-2 max-h-40 overflow-y-auto">
+              {pairs.slice(0, 5).map((pair) => (
+                <Button
+                  key={pair.pairAddress}
+                  variant="ghost"
+                  className="justify-start h-auto p-3"
+                  onClick={() => handlePairSelect(pair)}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <div>
+                      <div className="font-medium">
+                        {pair.baseToken.symbol}/{pair.quoteToken.symbol}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {pair.dexId}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-medium">
+                        ${dexScreenerService.formatPrice(pair.priceUsd)}
+                      </div>
+                      <div className={`text-sm ${getPriceChangeColor(pair.priceChange.h24)}`}>
+                        {dexScreenerService.formatPercentage(pair.priceChange.h24)}
+                      </div>
+                    </div>
+                  </div>
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* DEX Screener Embedded Chart */}
+        {selectedPair ? (
+          <div className="space-y-4">
+            {/* Quick Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-muted/20 rounded-lg">
+              <div className="text-center">
+                <div className="text-sm text-muted-foreground">24h Volume</div>
+                <div className="font-medium">
+                  {dexScreenerService.formatVolume(selectedPair.volume.h24)}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm text-muted-foreground">Liquidity</div>
+                <div className="font-medium">
+                  {selectedPair.liquidity?.usd 
+                    ? dexScreenerService.formatVolume(selectedPair.liquidity.usd)
+                    : 'N/A'
+                  }
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm text-muted-foreground">24h Txns</div>
+                <div className="font-medium">
+                  {selectedPair.txns.h24.buys + selectedPair.txns.h24.sells}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-sm text-muted-foreground">Market Cap</div>
+                <div className="font-medium">
+                  {selectedPair.marketCap 
+                    ? dexScreenerService.formatVolume(selectedPair.marketCap)
+                    : 'N/A'
+                  }
+                </div>
+              </div>
+            </div>
+
+            {/* Embedded Chart */}
+            <div className="h-96 w-full">
+              <iframe
+                src={`https://dexscreener.com/${selectedPair.chainId}/${selectedPair.pairAddress}?embed=1&theme=dark`}
+                className="w-full h-full rounded-lg border border-muted/20"
+                frameBorder="0"
+                title={`${selectedPair.baseToken.symbol}/${selectedPair.quoteToken.symbol} Chart`}
+              />
+            </div>
+
+            <div className="flex justify-center">
+              <Button
+                variant="outline"
+                onClick={() => window.open(selectedPair.url, '_blank')}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                View Full Chart on DEX Screener
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="h-96 flex items-center justify-center">
+            <div className="text-center">
+              <Search className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium mb-2">Search for a Trading Pair</h3>
+              <p className="text-muted-foreground">
+                Enter a token symbol or address to view real-time DEX data and charts
+              </p>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
