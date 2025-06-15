@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Web3Provider } from "@/components/Web3Provider";
 import Header from "@/components/Header";
+import Footer from "@/components/Footer";
 import Index from "./pages/Index";
 import Liquidity from "./pages/Liquidity";
 import Pool from "./pages/Pool";
@@ -43,6 +44,7 @@ const App = () => (
                 <Route path="/pool" element={<Pool />} />
               </Routes>
             </main>
+            <Footer />
           </div>
         </BrowserRouter>
       </TooltipProvider>
