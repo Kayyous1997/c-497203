@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,12 +20,33 @@ import { Link } from 'react-router-dom';
 
 const Index = () => {
   const [scrollY, setScrollY] = useState(0);
-  const [isVisible, setIsVisible] = useState({});
+  const [visibleSections, setVisibleSections] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const handleScroll = () => setScrollY(window.scrollY);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setVisibleSections(prev => ({
+              ...prev,
+              [entry.target.id]: true
+            }));
+          }
+        });
+      },
+      { threshold: 0.1, rootMargin: '-50px' }
+    );
+
+    const sections = document.querySelectorAll('[data-section]');
+    sections.forEach(section => observer.observe(section));
+
+    return () => observer.disconnect();
   }, []);
 
   const stats = [
@@ -85,7 +105,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-secondary/20">
       {/* Hero Section */}
-      <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
+      <section className="relative min-h-[80vh] flex items-center justify-center overflow-hidden pt-20">
         {/* Animated Background */}
         <div className="absolute inset-0 overflow-hidden">
           <div 
@@ -133,14 +153,22 @@ const Index = () => {
       </section>
 
       {/* Stats Section */}
-      <section className="py-20 px-4">
+      <section 
+        id="stats" 
+        data-section
+        className={`py-16 px-4 transition-all duration-1000 ${
+          visibleSections.stats ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+        }`}
+      >
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
             {stats.map((stat, index) => (
               <Card 
                 key={stat.label} 
-                className="text-center p-6 hover-scale animate-fade-in glass-card"
-                style={{ animationDelay: `${index * 0.1}s` }}
+                className={`text-center p-6 hover-scale glass-card transition-all duration-700 ${
+                  visibleSections.stats ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+                }`}
+                style={{ transitionDelay: `${index * 100}ms` }}
               >
                 <CardContent className="p-0">
                   <div className="text-3xl font-bold mb-2">{stat.value}</div>
@@ -157,9 +185,17 @@ const Index = () => {
       </section>
 
       {/* Features Section */}
-      <section className="py-20 px-4 bg-secondary/10">
+      <section 
+        id="features" 
+        data-section
+        className={`py-16 px-4 bg-secondary/10 transition-all duration-1000 ${
+          visibleSections.features ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+        }`}
+      >
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
+          <div className={`text-center mb-16 transition-all duration-700 ${
+            visibleSections.features ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+          }`}>
             <h2 className="text-4xl md:text-5xl font-bold mb-6">
               Why Choose Our DEX?
             </h2>
@@ -172,8 +208,10 @@ const Index = () => {
             {features.map((feature, index) => (
               <Card 
                 key={feature.title}
-                className="p-6 hover-scale animate-fade-in glass-card group hover:border-primary/20 transition-all duration-300"
-                style={{ animationDelay: `${index * 0.1}s` }}
+                className={`p-6 hover-scale glass-card group hover:border-primary/20 transition-all duration-700 ${
+                  visibleSections.features ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+                }`}
+                style={{ transitionDelay: `${index * 100}ms` }}
               >
                 <CardContent className="p-0">
                   <div className={`w-12 h-12 rounded-lg bg-gradient-to-br from-${feature.color.split('-')[1]}-400/20 to-${feature.color.split('-')[1]}-600/20 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform`}>
@@ -189,9 +227,17 @@ const Index = () => {
       </section>
 
       {/* Top Tokens Section */}
-      <section className="py-20 px-4">
+      <section 
+        id="tokens" 
+        data-section
+        className={`py-16 px-4 transition-all duration-1000 ${
+          visibleSections.tokens ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+        }`}
+      >
         <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-16">
+          <div className={`text-center mb-16 transition-all duration-700 ${
+            visibleSections.tokens ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+          }`}>
             <h2 className="text-4xl font-bold mb-6">Trending Tokens</h2>
             <p className="text-xl text-muted-foreground">
               Most traded tokens on our platform
@@ -202,8 +248,10 @@ const Index = () => {
             {topTokens.map((token, index) => (
               <Card 
                 key={token.symbol}
-                className="p-6 hover-scale animate-fade-in glass-card group cursor-pointer"
-                style={{ animationDelay: `${index * 0.1}s` }}
+                className={`p-6 hover-scale glass-card group cursor-pointer transition-all duration-700 ${
+                  visibleSections.tokens ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+                }`}
+                style={{ transitionDelay: `${index * 100}ms` }}
               >
                 <CardContent className="p-0">
                   <div className="flex items-center justify-between mb-4">
@@ -243,18 +291,32 @@ const Index = () => {
       </section>
 
       {/* CTA Section */}
-      <section className="py-20 px-4 bg-gradient-to-r from-primary/10 via-accent/10 to-success/10">
+      <section 
+        id="cta" 
+        data-section
+        className={`py-16 px-4 bg-gradient-to-r from-primary/10 via-accent/10 to-success/10 transition-all duration-1000 ${
+          visibleSections.cta ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+        }`}
+      >
         <div className="max-w-4xl mx-auto text-center">
-          <Globe className="h-16 w-16 mx-auto mb-6 text-primary animate-pulse-subtle" />
-          <h2 className="text-4xl font-bold mb-6">
+          <Globe className={`h-16 w-16 mx-auto mb-6 text-primary animate-pulse-subtle transition-all duration-700 ${
+            visibleSections.cta ? 'opacity-100 scale-100' : 'opacity-0 scale-75'
+          }`} />
+          <h2 className={`text-4xl font-bold mb-6 transition-all duration-700 ${
+            visibleSections.cta ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+          }`}>
             Ready to Start Trading?
           </h2>
-          <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+          <p className={`text-xl text-muted-foreground mb-8 max-w-2xl mx-auto transition-all duration-700 ${
+            visibleSections.cta ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+          }`} style={{ transitionDelay: '200ms' }}>
             Join thousands of traders who trust our platform for their DeFi needs. 
             Start your journey today.
           </p>
           
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <div className={`flex flex-col sm:flex-row gap-4 justify-center transition-all duration-700 ${
+            visibleSections.cta ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'
+          }`} style={{ transitionDelay: '400ms' }}>
             <Button size="lg" className="text-lg px-8 py-6 hover-scale">
               <Link to="/liquidity" className="flex items-center">
                 Launch App
