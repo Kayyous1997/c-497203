@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useAccount } from "wagmi";
 import { useWeb3Modal } from "@web3modal/wagmi/react";
@@ -20,7 +21,7 @@ const Header = () => {
   };
 
   const navigation = [
-    { name: 'Swap', href: '/' },
+    { name: 'Home', href: '/' },
     { name: 'Liquidity', href: '/liquidity' },
     { name: 'Pools', href: '/pool' }
   ];
@@ -31,7 +32,9 @@ const Header = () => {
         <div className="flex items-center justify-between">
           {/* Logo/Title and Navigation */}
           <div className="flex items-center space-x-8">
-            <h1 className="text-xl font-bold">Crypto Dashboard</h1>
+            <Link to="/" className="text-xl font-bold hover:text-primary transition-colors">
+              Crypto Dashboard
+            </Link>
             
             {/* Navigation Links */}
             <nav className="hidden md:flex space-x-6">
